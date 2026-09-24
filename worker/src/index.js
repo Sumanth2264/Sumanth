@@ -193,6 +193,7 @@ function districtHeaders(env) {
 }
 
 async function ensureMonitorTables(env) {
+  await env.DB.prepare("CREATE TABLE IF NOT EXISTS monitor_state (id INTEGER PRIMARY KEY CHECK(id=1), last_run_at TEXT, last_success_at TEXT, next_run_at TEXT, checked INTEGER DEFAULT 0, sent INTEGER DEFAULT 0)").run();
   await env.DB.prepare(
     "CREATE TABLE IF NOT EXISTS monitor_usage (month TEXT PRIMARY KEY, credits_used INTEGER NOT NULL DEFAULT 0, catalog_calls INTEGER NOT NULL DEFAULT 0, showtime_calls INTEGER NOT NULL DEFAULT 0)"
   ).run();
