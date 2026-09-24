@@ -273,13 +273,13 @@ $('#form').onsubmit=async e=>{
   const submit=e.submitter; if(submit) submit.disabled=true;
   toast('Saving alert','Connecting to CinePing…');
   try{
-    await apiCreateAlert({...a,email});
+    const result=await apiCreateAlert({...a,email});
     prefs.email=email;
     alerts=[a,...alerts];
     save();
     closeAlert();
     renderAll();
-    toast('Alert armed',movie+' is now registered with CinePing.');
+    toast(result.emailSent ? 'Alert armed' : 'Alert saved', result.emailSent ? movie+' is registered and the confirmation email was sent.' : movie+' is registered, but the confirmation email needs attention.');
   }catch(err){
     toast('Could not arm alert',err.message||'Please try again.');
   }finally{if(submit) submit.disabled=false;}
