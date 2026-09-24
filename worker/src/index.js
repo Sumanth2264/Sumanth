@@ -155,11 +155,11 @@ const DISTRICT_MOVIES_URL = "https://api.parse.bot/scraper/9dbc34b2-b7c3-4e9b-95
 const DISTRICT_SHOWTIMES_URL = "https://api.parse.bot/scraper/9dbc34b2-b7c3-4e9b-9540-6d2bb2568c57/get_movie_showtimes";
 
 const MONTHLY_CREDIT_CAP = 190;
-const MAX_SHOWTIME_CALLS_PER_TARGET = 7;
-const CREATION_BURST_CALLS = 4;
+const CREATION_BURST_CALLS = 2;
 const BURST_INTERVAL_MINUTES = 5;
-const NEAR_DATE_INTERVAL_MINUTES = 360;
-const NORMAL_INTERVAL_MINUTES = 2880;
+const NEAR_DATE_INTERVAL_MINUTES = 120;
+const NORMAL_INTERVAL_MINUTES = 1440;
+const RELEASE_DAY_INTERVAL_MINUTES = 5;
 const MOVIE_CACHE_HOURS = 168;
 
 function normalizeTitle(value) {
@@ -533,19 +533,6 @@ async function pollTarget(env, targetKey, immediate = false) {
 
   const targetAlert = alerts[0];
   const usageMonth = monthKey();
-  const targetCalls = target.usage_month === usageMonth
-    ? Number(target.showtime_calls_month || 0)
-    : 0;
-
-  if (targetCalls >= MAX_SHOWTIME_CALLS_PER_TARGET) {
-    const nextMonth = new Date();
-    nextMonth.setUTCMonth(nextMonth.getUTCMonth() + 1, 1);
-    nextMonth.setUTCHours(0, 5, 0, 0);
-    await env.DB.prepare(
-      "UPDATE monitor_targets SET usage_month=?,showtime_calls_month=0,next_poll_at=? WHERE target_key=?"
-    ).bind(monthKey(nextMonth), isoNoZ(nextMonth), targetKey).run();
-    return { checked: 0, sent: 0, skipped: true, reason: "target-month-cap" };
-  }
 
   const movieData = await fetchDistrictMoviesCached(env, target.city, false);
   const movie = findMovie(movieData, target.movie);
@@ -580,23 +567,31 @@ async function pollTarget(env, targetKey, immediate = false) {
   const burstRemaining = Math.max(0, Number(target.burst_remaining || 0) - 1);
 
   const dist = dateDistanceDays(requested || releaseDateFromMovie(movie));
-  const priorityWindow = dist !== null && dist <= 1 && dist >= -1;
+  const priorityWindow = dist !== null && dist <= 0 && dist >= -1;
   const nearWindow = dist !== null && dist <= 3 && dist >= -3;
 
   let nextDelayMinutes;
-  let nextBurstRemaining = burstRemaining;
-
   if (result.sent > 0) {
-    nextDelayMinutes = 1440;
-    nextBurstRemaining = 0;
-  } else if (priorityWindow && burstRemaining > 0) {
+    await env.DB.prepare(
+      "UPDATE monitor_targets SET active=0,movie_id=?,last_polled_at=?,last_success_at=?,last_match_at=?,next_poll_at=? WHERE target_key=?"
+    ).bind(
+      movieId,
+      isoNoZ(new Date()),
+      isoNoZ(new Date()),
+      isoNoZ(new Date()),
+      isoNoZ(new Date(Date.now() + 365 * 86400000)),
+      targetKey
+    ).run();
+    return { ...result, movieId, nextPollAt: null, deactivated: true };
+  }
+
+  if (priorityWindow) {
+    nextDelayMinutes = RELEASE_DAY_INTERVAL_MINUTES;
+  } else if (burstRemaining > 0) {
     nextDelayMinutes = BURST_INTERVAL_MINUTES;
-    nextBurstRemaining = Math.max(0, burstRemaining - 1);
-  } else if (dist !== null && dist > 3) {
-    nextDelayMinutes = dist <= 7 ? 720 : NORMAL_INTERVAL_MINUTES;
   } else if (nearWindow) {
-    nextDelayMinutes = 360;
-  } else if (burstRemaining > 0 && requested) {
+    nextDelayMinutes = NEAR_DATE_INTERVAL_MINUTES;
+  } else if (dist !== null && dist > 3 && dist <= 7) {
     nextDelayMinutes = 720;
   } else {
     nextDelayMinutes = NORMAL_INTERVAL_MINUTES;
@@ -604,24 +599,21 @@ async function pollTarget(env, targetKey, immediate = false) {
 
   const next = new Date(Date.now() + nextDelayMinutes * 60000);
   await env.DB.prepare(
-    "UPDATE monitor_targets SET movie_id=?,last_polled_at=?,last_success_at=?,last_match_at=CASE WHEN ? > 0 THEN ? ELSE last_match_at END,next_poll_at=?,burst_remaining=?,usage_month=?,showtime_calls_month=? WHERE target_key=?"
+    "UPDATE monitor_targets SET movie_id=?,last_polled_at=?,last_success_at=?,next_poll_at=?,burst_remaining=?,usage_month=?,showtime_calls_month=showtime_calls_month+1 WHERE target_key=?"
   ).bind(
     movieId,
     isoNoZ(new Date()),
     isoNoZ(new Date()),
-    result.sent,
-    isoNoZ(new Date()),
     isoNoZ(next),
-    nextBurstRemaining,
+    Math.max(0, Number(burstRemaining || 0) - 1),
     usageMonth,
-    newCalls,
     targetKey
   ).run();
 
   return { ...result, movieId, nextPollAt: isoNoZ(next) };
 }
 
-async function processDueTargets(env, limit = 1) {
+async function processDueTargets(env, limit = 2) {
   await ensureMonitorTables(env);
   const rows = await env.DB.prepare(
     "SELECT * FROM monitor_targets WHERE active=1"
@@ -684,12 +676,12 @@ export default {
       return json(env, {
         ok: true,
         service: "cineping-alert-api",
-        version: "2026-09-26-district-monitor-v6",
+        version: "2026-09-26-district-monitor-v7",
         d1: !!env.DB,
         mailConfigured: !!(env.BREVO_API_KEY && env.BREVO_FROM_EMAIL),
         districtConfigured: !!env.PARSE_API_KEY,
         schedulerConfigured: !!env.PARSE_API_KEY,
-        monthlyBudget: MONTHLY_CREDIT_CAP, monitorPolicy: { initialCheck: "immediate", priorityEveryMinutes: BURST_INTERVAL_MINUTES, preWindowEveryMinutes: NEAR_DATE_INTERVAL_MINUTES, normalEveryMinutes: NORMAL_INTERVAL_MINUTES, maxShowtimeCallsPerTarget: MAX_SHOWTIME_CALLS_PER_TARGET, monthlyCreditSafetyCap: MONTHLY_CREDIT_CAP },
+        monthlyBudget: MONTHLY_CREDIT_CAP, monitorPolicy: { initialCheck: "immediate", priorityEveryMinutes: BURST_INTERVAL_MINUTES, preWindowEveryMinutes: NEAR_DATE_INTERVAL_MINUTES, normalEveryMinutes: NORMAL_INTERVAL_MINUTES, releaseDayEveryMinutes: RELEASE_DAY_INTERVAL_MINUTES, monthlyCreditSafetyCap: MONTHLY_CREDIT_CAP, sharedCreditPool: true },
         usage: usage ? {
           credits: Number(usage.credits_used || 0),
           catalogCalls: Number(usage.catalog_calls || 0),
