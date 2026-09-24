@@ -118,6 +118,22 @@ footer{border-top:1px solid var(--line);padding:23px 0 34px;color:var(--subtle);
 @media(max-width:1050px){.heroGrid{grid-template-columns:1fr}.grid4{grid-template-columns:repeat(3,1fr)}.theatreGrid{grid-template-columns:repeat(3,1fr)}.controlbar{grid-template-columns:1.5fr 1fr 1fr 1fr auto}}
 @media(max-width:760px){.wrap{width:calc(100% - 20px)}.topin{height:62px}.nav{display:none}.hero{padding:48px 0 26px}.heroCopy{font-size:13px}.controlbar{grid-template-columns:1fr 1fr}.search{grid-column:1/-1}.section{padding:30px 0 55px}.sectionHead{align-items:flex-start;flex-direction:column}.grid4,.theatreGrid,.infoGrid,.alertLayout{grid-template-columns:1fr}.grid4{grid-template-columns:repeat(2,1fr)}.row{grid-template-columns:1fr}.theatreChoices{grid-template-columns:1fr 1fr}.modalFoot{flex-direction:column;align-items:stretch}.modalFoot .btn{width:100%}}
 @media(max-width:480px){.grid4{grid-template-columns:1fr}.art{height:250px}h1{font-size:48px}.ctaRow .btn{width:100%}.radarVisual{height:255px}}
+
+/* ShowTing-style catalogue details */
+.liveArt{background-position:center;background-size:cover;background-repeat:no-repeat}
+.liveArt:after{content:"LIVE";position:absolute;top:11px;right:11px;padding:5px 7px;border-radius:999px;background:rgba(5,7,11,.58);border:1px solid rgba(255,255,255,.12);font-size:7px;font-weight:950;letter-spacing:.12em;color:var(--mint)}
+.cinemaContext{display:flex;align-items:center;justify-content:space-between;gap:14px;margin-bottom:13px;padding:12px 14px;border:1px solid var(--line);border-radius:15px;background:var(--surface)}
+.cinemaContext strong{font-size:11px}.cinemaContext small{display:block;color:var(--muted);font-size:8px;margin-top:3px}
+.cinemaContext .mini{display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end}
+.theatre{min-height:170px}.theatreScreen{display:flex;gap:5px;flex-wrap:wrap;margin-top:8px}.theatreScreen span{font-size:7px;padding:4px 6px;border:1px solid var(--line);border-radius:7px;background:var(--surface2);color:var(--muted)}
+.showPills{display:flex;gap:5px;flex-wrap:wrap;margin-top:8px}.showPill{font-size:7px;padding:4px 6px;border:1px solid rgba(184,242,139,.16);border-radius:7px;color:var(--mint);background:rgba(184,242,139,.06)}
+.theatreActions{display:flex;gap:7px;align-items:center}
+.providerPills{display:flex;gap:5px;flex-wrap:wrap;margin-top:8px}
+.providerPills span{font-size:7px;padding:4px 6px;border:1px solid rgba(255,79,116,.18);border-radius:7px;color:#ffafbd;background:rgba(255,79,116,.06)}
+.detailLine{font-size:7px;color:var(--subtle);margin-top:6px;line-height:1.45}
+.datePickerRow{display:flex;gap:6px;flex-wrap:wrap;margin-top:7px}.datePill{border:1px solid var(--line);background:var(--surface2);color:var(--muted);border-radius:999px;padding:6px 8px;font-size:7px}.datePill.on{border-color:rgba(255,79,116,.28);background:rgba(255,79,116,.08);color:var(--text)}
+.emptyNote{padding:14px;border:1px dashed var(--line);border-radius:14px;color:var(--muted);font-size:8px;background:rgba(255,255,255,.015)}
+@media(max-width:760px){.cinemaContext{align-items:flex-start;flex-direction:column}.cinemaContext .mini{justify-content:flex-start}}
 </style>
 </head>
 <body>
@@ -137,7 +153,7 @@ footer{border-top:1px solid var(--line);padding:23px 0 34px;color:var(--subtle);
     <div>
       <div class="kicker">PERSONAL MOVIE BOOKING RADAR · INDIA</div>
       <h1>Never miss the<br><span class="outline">moment tickets drop.</span></h1>
-      <p class="heroCopy">Choose a movie, city, cinemas, screens, language, format and show window. CinePing turns that into one clean watch and is designed to email you when a matching booking becomes available.</p>
+      <p class="heroCopy">Choose a movie, city, cinemas, screen formats, language, date and show window. CinePing turns that into one clean watch and is designed to email you when a matching booking becomes available.</p>
       <div class="ctaRow"><button class="btn primary" id="create">Create a free alert</button><a class="btn secondary" href="#movies">Browse movies</a></div>
       <div class="trust"><span>✓ Email-first</span><span>✓ No Google login required</span><span>✓ Official booking handoff</span></div>
     </div>
@@ -164,7 +180,7 @@ footer{border-top:1px solid var(--line);padding:23px 0 34px;color:var(--subtle);
 <section id="movies" class="section wrap">
   <div class="sectionHead">
     <div><div class="kicker">LIVE MOVIE RADAR</div><h2>Now playing in your city</h2></div>
-    <div class="providerTabs" id="movieProviderTabs"><button class="active" data-provider="District">District LIVE</button><button data-provider="BookMyShow">BookMyShow LIVE</button></div>
+    <div class="providerTabs" id="movieProviderTabs"><button class="active" data-provider="All">All LIVE</button><button data-provider="District">District LIVE</button><button data-provider="BookMyShow">BookMyShow LIVE</button></div>
   </div><div class="providerRow"><span class="providerHint" id="catalogHint">Loading current movies from District…</span><span class="liveSource"><span class="dot"></span><span id="catalogLiveText">LIVE CATALOG</span></span></div>
   <div class="grid4" id="movieGrid"><div class="loading" style="grid-column:1/-1">Loading live movies…</div></div>
 </section>
@@ -179,7 +195,7 @@ footer{border-top:1px solid var(--line);padding:23px 0 34px;color:var(--subtle);
     <aside class="panel">
       <div class="kicker">HOW A WATCH WORKS</div>
       <div class="steps" style="margin-top:11px">
-        <div class="step"><div class="num">01</div><div><strong>Pick the movie</strong><span>Use the movie cards or type a title.</span></div></div>
+        <div class="step"><div class="num">01</div><div><strong>Pick the movie</strong><span>Use the live movie catalogue.</span></div></div>
         <div class="step"><div class="num">02</div><div><strong>Choose the cinema universe</strong><span>Select one, several, or every cinema available in your city.</span></div></div>
         <div class="step"><div class="num">03</div><div><strong>Define the drop</strong><span>FDFS, date range, screen, language, format and time.</span></div></div>
         <div class="step"><div class="num">04</div><div><strong>Get the email</strong><span>When a verified feed matches, go straight to the official booking page.</span></div></div>
@@ -201,7 +217,7 @@ footer{border-top:1px solid var(--line);padding:23px 0 34px;color:var(--subtle);
     <div class="info"><strong>Multi-cinema watch</strong><p>Select many theatres in one alert, including a future “select all” mode when the live provider catalog is connected.</p></div>
     <div class="info"><strong>Official booking handoff</strong><p>CinePing is an alert layer; booking stays on the provider's official page.</p></div>
   </div>
-  <div class="note" style="margin-top:12px">Live provider syncing is deliberately shown as a connection point rather than fabricated. District's terms prohibit scraping/crawling or bypassing measures, so an authorised feed/API is needed for automated nationwide catalogue sync.</div>
+  <div class="note" style="margin-top:12px">CinePing uses structured live data feeds for discovery and monitoring. Booking stays with the provider; CinePing does not take payments or handle seat selection.</div>
 </section>
 
 <footer class="wrap"><span>© 2026 CinePing</span><span>Personalised movie alerts · no ticket sales</span><span><a href="privacy.html">Privacy</a> · <a href="terms.html">Terms</a></span></footer>
@@ -211,15 +227,15 @@ footer{border-top:1px solid var(--line);padding:23px 0 34px;color:var(--subtle);
   <section class="modal" role="dialog" aria-modal="true" aria-labelledby="modalTitle">
     <div class="modalHead"><div><div class="kicker">NEW WATCH</div><h2 class="modalTitle" id="modalTitle">Build your alert</h2></div><button class="close" id="close">×</button></div>
     <form class="form" id="form">
-      <div class="row"><label class="field">Source<select id="modalProvider"><option>District</option><option>BookMyShow</option></select></label><label class="field">City<select id="modalCity" required></select></label></div>
-      <label class="field">Movie <span style="color:var(--subtle)">Current movies only · loaded live</span><select id="movieSelect" required><option value="">Loading current movies…</option></select></label>
+      <div class="row"><label class="field">Movie catalogue<select id="modalProvider"><option>District</option><option>BookMyShow</option></select></label><label class="field">City<select id="modalCity" required></select></label></div>
+      <label class="field">Movie <span style="color:var(--subtle)">Current movies only · live</span><select id="movieSelect" required><option value="">Loading current movies…</option></select></label>
       <label class="field">Theatres <span style="color:var(--subtle)" id="theatreStatus">Choose a movie to load its live theatre list</span><button type="button" class="tiny" id="selectAllTheatres" style="justify-self:start">Select all</button><div class="theatreChoices" id="choices"></div></label>
       <div class="row"><label class="field">Language<select id="modalLang"><option>Any</option></select></label><label class="field">Format<select id="modalFormat"><option>Any</option></select></label></div>
       <div class="row"><label class="field">Show window<select id="modalTime"><option>Any time</option><option>FDFS only</option><option>Morning · 6–12</option><option>Afternoon · 12–5</option><option>Evening · 5–10</option><option>Late night · 10+</option></select></label><label class="field">Date preference<select id="modalDate"><option>Any date</option><option>Release day</option><option>Next day</option><option>This weekend</option><option>Specific date</option></select></label></div>
       <div class="row" id="specificDateWrap" style="display:none"><label class="field">Specific date<input id="specificDate" type="date"></label><div></div></div><div id="liveDateRow" style="display:none;margin-top:6px"><label class="field">Available provider dates<select id="liveAvailableDate"><option value="">Provider default</option></select></label></div>
-      <label class="field">Booking sources <span class="checkrow"><label class="check"><input class="source" value="District" type="checkbox" checked> District</label><label class="check"><input class="source" value="BookMyShow" type="checkbox" checked> BookMyShow</label></span></label>
+      <label class="field">Monitor booking sources <span class="checkrow"><label class="check"><input class="source" value="District" type="checkbox" checked> District</label><label class="check"><input class="source" value="BookMyShow" type="checkbox" checked> BookMyShow</label></span></label>
       <label class="field">Email for alerts<input id="email" type="email" required autocomplete="email" placeholder="you@example.com"></label>
-      <div class="modalFoot"><small>Movie and theatre choices come from the selected live provider. Your API key stays on the server.</small><button class="btn primary" type="submit">Create alert →</button></div>
+      <div class="modalFoot"><small>Your movie catalogue is live. CinePing can monitor both supported booking sources and sends you the official booking handoff when your rules match.</small><button class="btn primary" type="submit">Create alert →</button></div>
     </form>
   </section>
 </div>
@@ -240,33 +256,21 @@ footer{border-top:1px solid var(--line);padding:23px 0 34px;color:var(--subtle);
 
 <script>
 const CITIES=['Hyderabad','Guntur','Vijayawada','Visakhapatnam','Bengaluru','Chennai','Mumbai','Delhi NCR','Pune','Kolkata','Kochi','Ahmedabad','Jaipur','Lucknow','Indore','Nagpur','Nellore','Tirupati','Kurnool','Kakinada','Coimbatore','Mysuru','Surat','Chandigarh','Patna','Bhopal','Guwahati','Agra','Vadodara','Kanpur','Noida','Gurugram','Faridabad','Ghaziabad','Bhubaneswar','Ranchi','Raipur','Varanasi','Amritsar','Ludhiana','Panaji','Nashik','Rajkot','Udaipur','Dehradun','Mangalore','Madurai','Salem','Thrissur','Thiruvananthapuram','Warangal','Rajahmundry','Anantapur','Kadapa'];
-const THEATRES={Hyderabad:['Prasads Multiplex','ALLU Cinemas: Kokapet','AMB Cinemas: Gachibowli','PVR: Lakeshore Mall','PVR: Inorbit, Cyberabad','Asian Shiva Ganga: Dilsukhnagar','Cinepolis: TNR North City','EART Cinemas: Vanasthalipuram','AAA Cinemas: Ameerpet','Asian Lakshmikala Cinepride: Moosapet','Bhramaramba 70MM','Devi 70MM 4K','PVR: Preston, Gachibowli','Asian Jyothi: RC Puram','INOX: Sattva Necklace Mall','PVR: Atrium Gachibowli','Asian Tarakarama Cineplex','Arjun 70MM','Miraj Cinemas: A2A Central Mall','Asian M Cube Mall','PVR: Next Galleria Mall','Sandhya 35mm','Gokul 70MM','Aparna Cinemas','Vyjayanthi Cinema','Sri Ramana 70MM','Cinepolis: DSL Virtue Mall','Asian Cineplanet Multiplex','PVR ICON: Hitech','Ramakrishna Glitterati','Platinum Movietime Cinema','Miraj Cinemas: Raghavendra'],Guntur:['Cine Prime','Siva Cinemas Dolby Atmos','Cine Square Dolby Atmos','Bollywood Theatre','Venkatesh Cinemas','Hari Hara Mahadev'],Vijayawada:['INOX: LEPL','PVR: Ripples Mall','Capital Cinemas','Sairam Cinemas','Raj Yuvraj Theatre','Swathi Cinema'],Visakhapatnam:['INOX: CMR Central','Cinepolis: CMR Central','Melody Theatre','Sangam Sarat Theatre','Kameswari Cinema'],Bengaluru:['PVR IMAX: Forum','Cinepolis: Forum Shantiniketan','INOX: Nexus Mall','PVR: Orion Mall','Cinepolis: ETA Mall','Galaxy Cinemas'],Chennai:['PVR: Palazzo','Luxe Cinemas','AGS Cinemas','Rohini Silver Screens','Sathyam Cinemas','Kamala Cinemas'],Mumbai:['PVR ICON: Phoenix','INOX: R City','Cinepolis: Viviana','Metro INOX','PVR: Juhu','Regal Cinema'],'Delhi NCR':['PVR: Pacific','INOX: Nehru Place','Cinepolis: DLF Avenue','PVR Directors Cut','INOX: Logix','PVR: Promenade']};
-const MOVIES=[
-{title:'The Paradise',city:'Hyderabad',langs:['Telugu','Hindi','Tamil','Malayalam','Kannada'],fmts:['2D','4K','Dolby Atmos'],status:'upcoming',date:'24 Sep 2026',art:'a',label:'THE<br>PARADISE'},
-{title:'Spider-Man: Brand New Day',city:'Bengaluru',langs:['English','Hindi','Tamil','Telugu'],fmts:['2D','IMAX','4DX'],status:'now',date:'Now showing',art:'b',label:'SPIDER-MAN<br>BRAND NEW DAY'},
-{title:'Demon Slayer: Infinity Castle',city:'Hyderabad',langs:['Japanese','English'],fmts:['2D','IMAX'],status:'now',date:'Now showing',art:'c',label:'DEMON SLAYER<br>INFINITY CASTLE'},
-{title:'Awarapan 2',city:'Mumbai',langs:['Hindi'],fmts:['2D','4K'],status:'now',date:'Now showing',art:'d',label:'AWARAPAN<br>2'},
-{title:'Vishwanath & Sons',city:'Hyderabad',langs:['Telugu','Tamil'],fmts:['2D','Dolby Atmos'],status:'upcoming',date:'28 Sep 2026',art:'a',label:'VISHWANATH<br>& SONS'},
-{title:'Batwara 1947',city:'Delhi NCR',langs:['Hindi'],fmts:['2D'],status:'now',date:'Now showing',art:'c',label:'BATWARA<br>1947'},
-{title:'Makutam',city:'Bengaluru',langs:['Telugu'],fmts:['2D','4K'],status:'upcoming',date:'25 Sep 2026',art:'d',label:'MAKUTAM'},
-{title:'The Odyssey',city:'Chennai',langs:['English'],fmts:['IMAX','4DX','2D'],status:'now',date:'Now showing',art:'b',label:'THE<br>ODYSSEY'}
-];
 const defaults={city:'Hyderabad',theme:'dark',email:''};
-let prefs={...defaults,...JSON.parse(localStorage.getItem('cineping-v4-prefs')||'{}')};
-let alerts=JSON.parse(localStorage.getItem('cineping-v4-alerts')||'null')||[
-{movie:'The Paradise',city:'Hyderabad',theatres:['Prasads Multiplex','PVR ICON: Hitech'],language:'Any',format:'IMAX',time:'FDFS only',date:'Release day',sources:['District','BookMyShow'],status:'ARMED'},
-{movie:'Spider-Man: Brand New Day',city:'Bengaluru',theatres:['PVR IMAX: Forum'],language:'English',format:'IMAX',time:'Evening · 5–10',date:'Any date',sources:['District','BookMyShow'],status:'MATCHED'}
-];
+let prefs={...defaults,...JSON.parse(localStorage.getItem('cineping-v5-prefs')||'{}')};
+let alerts=JSON.parse(localStorage.getItem('cineping-v5-alerts')||'null')||[];
 const $=s=>document.querySelector(s),$$=s=>[...document.querySelectorAll(s)];
 const esc=v=>String(v??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]||c));
-function save(){localStorage.setItem('cineping-v4-prefs',JSON.stringify(prefs));localStorage.setItem('cineping-v4-alerts',JSON.stringify(alerts))}
+function save(){localStorage.setItem('cineping-v5-prefs',JSON.stringify(prefs));localStorage.setItem('cineping-v5-alerts',JSON.stringify(alerts))}
 function toast(t,m){$('#toastTitle').textContent=t;$('#toastText').textContent=m;$('#toast').classList.add('show');clearTimeout(window._toast);window._toast=setTimeout(()=>$('#toast').classList.remove('show'),2800)}
 function cities(){for(const id of ['city','modalCity']){const el=$('#'+id);const val=id==='modalCity'?(prefs.city||'Hyderabad'):el.value;el.innerHTML=id==='city'?'<option value="">All India</option>':'';CITIES.forEach(city=>{const o=document.createElement('option');o.value=city;o.textContent=city;o.selected=city===val;el.appendChild(o)})}}
 const API_BASE='https://cineping-alert-api.sumanthbabu12345.workers.dev';
-let liveMovieProvider='District';
+let liveMovieProvider='All';
 let liveMovies=[];
 let modalMovies=[];
 let modalTheatreData=null;
+let modalCatalogs={};
+let lastCinemaContext={provider:'',city:'',movie:'',data:null};
 const catalogCache={};
 
 async function apiJson(path,params={}){
@@ -291,44 +295,108 @@ function populateMovieFilters(movies){
 }
 function movieCardHtml(m){
   const title=esc(m.title),city=esc(m.city||''),poster=m.poster||'';
-  const bg=poster?' style="background-image:linear-gradient(180deg,transparent 20%,rgba(5,7,11,.92) 100%),url(\''+esc(poster)+'\');background-size:cover;background-position:center"':'';
+  const bg=poster?' style="background-image:linear-gradient(180deg,transparent 10%,rgba(5,7,11,.94) 100%),url(\''+esc(poster)+'\');background-size:cover;background-position:center"':'';
   const langs=(m.languages||[]).slice(0,3).map(x=>'<span class="chip">'+esc(x)+'</span>').join('');
-  const fmts=(m.formats||[]).slice(0,2).map(x=>'<span class="chip">'+esc(x)+'</span>').join('');
-  return '<article class="movie"><div class="art liveArt"'+bg+'><div class="artTitle">'+title+'</div></div><div class="movieBody"><div class="movieTitle">'+title+'</div><div class="movieMeta">'+city+(m.date?' · '+esc(liveMovieDate(m.date)):'')+'</div><div class="chips">'+langs+fmts+'</div><div class="movieFoot"><span class="date">'+esc(m.source)+'</span><button class="arm" data-live-movie="'+esc(m.id)+'" data-live-provider="'+esc(m.source)+'" data-live-city="'+city+'" data-live-title="'+title+'">Notify me</button></div></div></article>';
+  const fmts=(m.formats||[]).slice(0,3).map(x=>'<span class="chip">'+esc(x)+'</span>').join('');
+  const providers=(m.providers||[m.source]).filter(Boolean);
+  const providerText=providers.length>1?'Multi-source':(providers[0]||'Live');
+  const providerId=m.id||'';
+  return '<article class="movie"><div class="art liveArt"'+bg+'><div class="artTitle">'+title+'</div></div><div class="movieBody"><div class="movieTitle">'+title+'</div><div class="movieMeta">'+city+(m.date?' · '+esc(liveMovieDate(m.date)):'')+'</div><div class="chips">'+langs+fmts+'</div><div class="providerPills">'+providers.map(x=>'<span>'+esc(x)+'</span>').join('')+'</div><div class="movieFoot"><span class="date">'+esc(providerText)+'</span><button class="arm" data-live-movie="'+esc(providerId)+'" data-live-provider="'+esc(m.primaryProvider||m.source||'District')+'" data-live-city="'+city+'" data-live-title="'+title+'">Notify me</button></div></div></article>';
 }
+function mergeMovieCatalogs(district,bms,city){
+  const map=new Map();
+  for(const list of [district,bms]){
+    for(const m of (Array.isArray(list)?list:[])){
+      const key=normalizeTitleClient(m.title);
+      if(!key)continue;
+      const current=map.get(key);
+      if(!current){
+        map.set(key,{...m,providers:[m.source],primaryProvider:m.source});
+      }else{
+        current.providers=[...new Set([...(current.providers||[]),m.source])];
+        current.languages=[...new Set([...(current.languages||[]),...(m.languages||[])])];
+        current.formats=[...new Set([...(current.formats||[]),...(m.formats||[])])];
+        if((!current.poster||current.poster.length<10)&&m.poster)current.poster=m.poster;
+        if(m.source==='District'&&current.primaryProvider!=='District'){current.primaryProvider='District';current.id=m.id}
+      }
+    }
+  }
+  return [...map.values()].map(m=>({...m,city}));
+}
+function normalizeTitleClient(v){return String(v||'').toLowerCase().replace(/&/g,'and').replace(/[^a-z0-9]+/g,' ').trim();}
 function renderMovies(){
   const q=$('#q').value.toLowerCase(),c=$('#city').value,l=$('#language').value,f=$('#format').value;
   const data=liveMovies.filter(m=>(!c||m.city===c)&&(!l||m.languages?.includes(l))&&(!f||m.formats?.includes(f))&&(!q||[m.title,m.city,...(m.languages||[])].join(' ').toLowerCase().includes(q)));
   $('#movieGrid').innerHTML=data.map(movieCardHtml).join('')||'<div class="panel" style="grid-column:1/-1">No live movies match those filters.</div>';
   $$('[data-live-movie]').forEach(b=>b.onclick=()=>openAlert(b.dataset.liveTitle,b.dataset.liveCity,b.dataset.liveProvider,b.dataset.liveMovie));
 }
-async function loadLiveMovies(provider=liveMovieProvider,city=$('#city').value||prefs.city||'Hyderabad',force=false){
-  liveMovieProvider=provider;$('#catalogHint').textContent='Loading current movies from '+provider+'…';$('#catalogLiveText').textContent='SYNCING';
+async function getCatalog(provider,city,force=false){
   const key=provider+'|'+city.toLowerCase();
-  if(!force&&catalogCache[key]){liveMovies=catalogCache[key];populateMovieFilters(liveMovies);$('#catalogHint').textContent=liveMovies.length+' current movies · '+city;$('#catalogLiveText').textContent='LIVE CATALOG';renderMovies();return;}
-  try{
-    const data=await apiJson('/api/catalog',{source:provider,city});
-    liveMovies=Array.isArray(data.movies)?data.movies:[];catalogCache[key]=liveMovies;populateMovieFilters(liveMovies);
-    $('#catalogHint').textContent=liveMovies.length+' current movies · '+city+(data.cached?' · cached live feed':' · fresh feed');$('#catalogLiveText').textContent='LIVE CATALOG';renderMovies();
-  }catch(err){$('#catalogHint').textContent=err.message||'Live catalogue unavailable';$('#catalogLiveText').textContent='OFFLINE';$('#movieGrid').innerHTML='<div class="panel" style="grid-column:1/-1">Live '+esc(provider)+' movie data could not be loaded right now.</div>';}
+  if(!force&&catalogCache[key])return catalogCache[key];
+  const data=await apiJson('/api/catalog',{source:provider,city});
+  const movies=Array.isArray(data.movies)?data.movies:[];
+  catalogCache[key]=movies;
+  return movies;
 }
-function providerTabs(){$$('#movieProviderTabs button').forEach(b=>b.onclick=()=>{$$('#movieProviderTabs button').forEach(x=>x.classList.remove('active'));b.classList.add('active');loadLiveMovies(b.dataset.provider,$('#city').value||prefs.city||'Hyderabad',true)})}
+async function loadLiveMovies(provider=liveMovieProvider,city=$('#city').value||prefs.city||'Hyderabad',force=false){
+  liveMovieProvider=provider;
+  $('#catalogHint').textContent='Loading current movies from '+(provider==='All'?'District + BookMyShow':provider)+'…';
+  $('#catalogLiveText').textContent='SYNCING';
+  try{
+    if(provider==='All'){
+      const [district,bms]=await Promise.all([getCatalog('District',city,force),getCatalog('BookMyShow',city,force)]);
+      liveMovies=mergeMovieCatalogs(district,bms,city);
+    }else{
+      liveMovies=await getCatalog(provider,city,force);
+    }
+    populateMovieFilters(liveMovies);
+    $('#catalogHint').textContent=liveMovies.length+' current movies · '+city+' · '+(provider==='All'?'merged live feeds':provider);
+    $('#catalogLiveText').textContent='LIVE CATALOG';
+    renderMovies();
+  }catch(err){
+    $('#catalogHint').textContent=err.message||'Live catalogue unavailable';
+    $('#catalogLiveText').textContent='OFFLINE';
+    $('#movieGrid').innerHTML='<div class="panel" style="grid-column:1/-1">Live catalogue could not be loaded right now.</div>';
+  }
+}
+function providerTabs(){
+  $$('#movieProviderTabs button').forEach(b=>b.onclick=()=>{
+    $$('#movieProviderTabs button').forEach(x=>x.classList.remove('active'));
+    b.classList.add('active');
+    loadLiveMovies(b.dataset.provider,$('#city').value||prefs.city||'Hyderabad',false);
+  });
+}
 function theatreChoicesFromData(data){
-  modalTheatreData=data;const list=Array.isArray(data?.theatres)?data.theatres:[];
+  modalTheatreData=data;
+  lastCinemaContext={provider:data?.source||'',city:data?.city||'',movie:data?.movie||'',data};
+  const list=Array.isArray(data?.theatres)?data.theatres:[];
+  const dates=(data?.availableDates||[]).map(normalizeAvailableDate).filter(Boolean);
   $('#theatreStatus').textContent=list.length?(list.length+' live theatres · '+data.source):'No theatres returned for this movie/date.';
+  if($('#liveDateRow')){
+    $('#liveDateRow').style.display=dates.length?'block':'none';
+    $('#liveAvailableDate').innerHTML='<option value="">Provider default</option>'+dates.map(d=>'<option value="'+d+'">'+new Date(d+'T00:00:00Z').toLocaleDateString('en-IN',{weekday:'short',day:'2-digit',month:'short'})+'</option>').join('');
+  }
   $('#choices').innerHTML=list.map(t=>{
-    const showList=(t.shows||[]).slice(0,4).map(s=>[s.time,s.language,s.format].filter(Boolean).join(' · ')).filter(Boolean);
-    return '<button type="button" class="choice" data-t="'+esc(t.name)+'"><strong>'+esc(t.name)+'</strong>'+(t.address?'<small>'+esc(t.address)+'</small>':'')+(showList.length?'<small>'+esc(showList.join('  |  '))+'</small>':'<small>No showtime details returned</small>')+'</button>';
+    const showList=(t.shows||[]).slice(0,5).map(s=>[s.time,s.language,s.format].filter(Boolean).join(' · ')).filter(Boolean);
+    const screens=(t.screenTypes||[]).slice(0,4);
+    const seats=[...new Set((t.shows||[]).flatMap(s=>Array.isArray(s.seatCategories)?s.seatCategories:[]).map(x=>typeof x==='string'?x:(x.name||x.category||'')).filter(Boolean))].slice(0,4);
+    return '<button type="button" class="choice" data-t="'+esc(t.name)+'"><strong>'+esc(t.name)+'</strong>'+
+      (t.address?'<small>'+esc(t.address)+'</small>':'')+
+      (screens.length?'<small>Screen: '+esc(screens.join(', '))+'</small>':'')+
+      (seats.length?'<small>Seats: '+esc(seats.join(', '))+'</small>':'')+
+      (showList.length?'<small>'+esc(showList.join('  |  '))+'</small>':'<small>No showtime details returned</small>')+
+      '</button>';
   }).join('')||'<div style="color:var(--subtle);font-size:8px;padding:8px">No theatre listings available.</div>';
   $$('.choice').forEach(b=>b.onclick=()=>b.classList.toggle('on'));
   $('#selectAllTheatres').onclick=()=>{const all=$$('.choice');const should=all.some(x=>!x.classList.contains('on'));all.forEach(x=>x.classList.toggle('on',should));};
+  renderTheatres();
 }
 function fillMovieMeta(movie){
   const langs=[...new Set(movie?.languages||[])].filter(Boolean),fmts=[...new Set(movie?.formats||[])].filter(Boolean);
   $('#modalLang').innerHTML='<option>Any</option>'+langs.map(x=>'<option>'+esc(x)+'</option>').join('');
   $('#modalFormat').innerHTML='<option>Any</option>'+fmts.map(x=>'<option>'+esc(x)+'</option>').join('');
 }
-async function normalizeAvailableDate(v){
+function normalizeAvailableDate(v){
   if(!v)return '';
   if(typeof v==='object')v=v.date||v.value||v.iso||v.label||'';
   v=String(v).trim();
@@ -337,55 +405,85 @@ async function normalizeAvailableDate(v){
   const d=new Date(v);
   return Number.isNaN(d.getTime())?'':d.toISOString().slice(0,10);
 }
-function loadModalTheatres(){
+async function loadModalTheatres(){
   const movie=modalMovies.find(m=>m.id===$('#movieSelect').value);
   const provider=$('#modalProvider').value;
   $('#choices').innerHTML='<div style="color:var(--subtle);font-size:8px;padding:8px">Loading theatres from '+esc(provider)+'…</div>';
   $('#theatreStatus').textContent='Contacting '+esc(provider)+' showtime feed…';
   if(!movie){fillMovieMeta(null);return;}
   fillMovieMeta(movie);
-  const date=$('#modalDate').value==='Specific date'?$('#specificDate').value:'';
+  const date=$('#modalDate').value==='Specific date'?$('#specificDate').value:($('#liveAvailableDate')?.value||'');
   try{
     const data=await apiJson('/api/showtimes',{source:provider,city:$('#modalCity').value,movieId:movie.id,movie:movie.title,date});
     theatreChoicesFromData(data);
-    if(!data.theatres?.length && (data.availableDates||[]).length && !date){
-      const first=(data.availableDates||[]).map(normalizeAvailableDate).filter(Boolean).sort().find(x=>x>=new Date().toISOString().slice(0,10));
-      if(first && $('#liveAvailableDate')){
-        $('#liveAvailableDate').value=first;
-        const retry=await apiJson('/api/showtimes',{source:provider,city:$('#modalCity').value,movieId:movie.id,movie:movie.title,date:first});
-        theatreChoicesFromData(retry);
-      }
-    }
+    if($('#liveAvailableDate')&&date)$('#liveAvailableDate').value=date;
   }catch(err){
     $('#theatreStatus').textContent=err.message||'Could not load live theatres';
-    $('#choices').innerHTML='<div style="color:var(--subtle);font-size:8px;padding:8px">Unable to load live theatres. <button type="button" class="tiny" id="retryTheatres">Retry</button></div>';
+    $('#choices').innerHTML='<div class="emptyNote">Unable to load live theatres. <button type="button" class="tiny" id="retryTheatres">Retry</button></div>';
     $('#retryTheatres')?.addEventListener('click',loadModalTheatres);
   }
 }
 async function loadModalMovies(provider=$('#modalProvider').value,city=$('#modalCity').value||prefs.city||'Hyderabad',selectedTitle=''){
   $('#modalProvider').value=provider;$('#movieSelect').innerHTML='<option value="">Loading current movies…</option>';$('#movieSelect').disabled=true;
   try{
-    const key=provider+'|'+city.toLowerCase();
-    if(catalogCache[key])modalMovies=catalogCache[key];else{const data=await apiJson('/api/catalog',{source:provider,city});modalMovies=data.movies||[];catalogCache[key]=modalMovies;}
+    const movies=await getCatalog(provider,city,false);
+    modalCatalogs[provider]=movies;
+    modalMovies=movies;
     $('#movieSelect').innerHTML='<option value="">Select a current movie…</option>'+modalMovies.map(m=>'<option value="'+esc(m.id)+'">'+esc(m.title)+'</option>').join('');
     $('#movieSelect').disabled=false;
     const chosen=modalMovies.find(m=>m.title===selectedTitle);
-    if(chosen){$('#movieSelect').value=chosen.id;await loadModalTheatres();}else{fillMovieMeta(null);$('#choices').innerHTML='<div style="color:var(--subtle);font-size:8px;padding:8px">Choose a movie to load its live theatres.</div>';$('#theatreStatus').textContent='Choose a movie to load its live theatre list';}
-  }catch(err){$('#movieSelect').innerHTML='<option value="">Live movie list unavailable</option>';$('#theatreStatus').textContent=err.message||'Live data unavailable';$('#choices').innerHTML=''}
+    if(chosen){$('#movieSelect').value=chosen.id;await loadModalTheatres();}
+    else{
+      fillMovieMeta(null);
+      $('#choices').innerHTML='<div class="emptyNote">Choose a movie to load its live theatres and showtime details.</div>';
+      $('#theatreStatus').textContent='Choose a movie to load its live theatre list';
+    }
+  }catch(err){
+    $('#movieSelect').innerHTML='<option value="">Live movie list unavailable</option>';
+    $('#theatreStatus').textContent=err.message||'Live data unavailable';$('#choices').innerHTML='';
+  }
 }
 function openAlert(movie='',city='',provider='District',providerMovieId=''){
-  cities();$('#modal').hidden=false;$('#modalProvider').value=provider||'District';$('#modalCity').value=city||prefs.city||'Hyderabad';$('#email').value=prefs.email||'';$('#modalDate').value='Any date';$('#specificDate').value='';syncSpecificDate();document.body.style.overflow='hidden';
-  loadModalMovies($('#modalProvider').value,$('#modalCity').value,movie).then(()=>{if(providerMovieId){$('#movieSelect').value=providerMovieId;loadModalTheatres();}});
+  cities();$('#modal').hidden=false;$('#modalProvider').value=(provider==='BookMyShow'?'BookMyShow':'District');$('#modalCity').value=city||prefs.city||'Hyderabad';$('#email').value=prefs.email||'';$('#modalDate').value='Any date';$('#specificDate').value='';modalCatalogs={};syncSpecificDate();document.body.style.overflow='hidden';
+  loadModalMovies($('#modalProvider').value,$('#modalCity').value,movie).then(()=>{
+    if(providerMovieId){$('#movieSelect').value=providerMovieId;loadModalTheatres();}
+  });
 }
 function closeAlert(){$('#modal').hidden=true;document.body.style.overflow=''}
 function renderAlerts(){const list=alerts;$('#alertCount').textContent=list.length;$('#heroA').textContent=list.length;$('#heroM').textContent=list.filter(a=>a.status==='MATCHED').length;$('#alertGrid').innerHTML=list.map((a,i)=>'<article class="alertCard"><div class="alertHeader"><div><strong>'+esc(a.movie)+'</strong><div class="movieMeta">'+esc(a.city)+' · '+esc(a.date)+'</div></div><span class="status">'+esc(a.status)+'</span></div><div class="alertLine"></div><div class="chips"><span class="chip">'+esc(a.language)+'</span><span class="chip">'+esc(a.format)+'</span><span class="chip">'+esc(a.time)+'</span>'+a.theatres.slice(0,3).map(t=>'<span class="chip">'+esc(t)+'</span>').join('')+'</div><div class="alertActions"><button class="tiny" data-del="'+i+'">Delete</button><button class="tiny" data-edit="'+i+'">Edit</button></div></article>').join('');$$('[data-del]').forEach(b=>b.onclick=()=>{alerts.splice(+b.dataset.del,1);save();renderAlerts();toast('Alert removed','Your watch was removed.')});$$('[data-edit]').forEach(b=>b.onclick=()=>{const a=alerts[+b.dataset.edit];openAlert(a.movie,a.city,a.provider||'District',a.providerMovieId||'')})}
-function renderTheatres(){const city=prefs.city;$('#cityPill').textContent='⌖ '+city;$('#theatreGrid').innerHTML='<div class="panel" style="grid-column:1/-1">Select a live movie above to load its current theatre list from District or BookMyShow.</div>'}
+function renderTheatres(){
+  const city=lastCinemaContext.city||prefs.city||'Hyderabad';
+  $('#cityPill').textContent='⌖ '+city;
+  const data=lastCinemaContext.data;
+  if(!data||!Array.isArray(data.theatres)||!data.theatres.length){
+    $('#theatreGrid').innerHTML='<div class="panel" style="grid-column:1/-1">Open a live movie to see the current theatre list, screen formats and available showtimes.</div>';
+    return;
+  }
+  const shows=data.theatres.flatMap(t=>t.shows||[]);
+  const provider=data.source||'Live';
+  const movie=lastCinemaContext.movie||'Selected movie';
+  $('#theatreGrid').innerHTML=
+    '<div class="cinemaContext" style="grid-column:1/-1"><div><strong>'+esc(movie)+' · '+esc(city)+'</strong><small>'+data.theatres.length+' theatres from '+esc(provider)+(data.availableDates?.length?' · '+data.availableDates.length+' bookable dates':'')+'</small></div><div class="mini"><span class="chip">'+esc([...new Set(shows.map(s=>s.format).filter(Boolean))].slice(0,3).join(' · ')||'Multiple formats')+'</span><button class="btn secondary" id="contextAlert">Notify me</button></div></div>'+
+    data.theatres.map(t=>{
+      const screen=(t.screenTypes||[]).slice(0,4);
+      const pills=(t.shows||[]).slice(0,5).map(s=>'<span class="showPill">'+esc([s.time,s.language,s.format].filter(Boolean).join(' · '))+'</span>').join('');
+      const seats=[...new Set((t.shows||[]).flatMap(s=>Array.isArray(s.seatCategories)?s.seatCategories:[]).map(x=>typeof x==='string'?x:(x.name||x.category||'')).filter(Boolean))].slice(0,3);
+      return '<article class="theatre"><div class="theatreTop"><div><div class="theatreName">'+esc(t.name)+'</div><div class="theatreMeta">'+esc(t.address||'')+'</div></div><span class="km">'+((t.shows||[]).length)+' shows</span></div>'+
+      (screen.length?'<div class="theatreScreen">'+screen.map(x=>'<span>'+esc(x)+'</span>').join('')+'</div>':'')+
+      (seats.length?'<div class="detailLine">Seat types: '+esc(seats.join(', '))+'</div>':'')+
+      '<div class="showPills">'+(pills||'<span class="detailLine">No showtime details returned</span>')+'</div>'+
+      '<div class="theatreBottom"><span class="count">'+esc(provider)+'</span><div class="theatreActions"><button class="selectTheatre" data-context-theatre="'+esc(t.name)+'">Notify here</button></div></div></article>';
+    }).join('');
+  $('#contextAlert')?.addEventListener('click',()=>openAlert(movie,city,provider,liveMovies.find(m=>m.title===movie)?.id||''));
+  $$('[data-context-theatre]').forEach(b=>b.onclick=()=>openAlert(movie,city,provider,liveMovies.find(m=>m.title===movie)?.id||''));
+}
 function syncSpecificDate(){const wrap=$('#specificDateWrap');const on=$('#modalDate').value==='Specific date';wrap.style.display=on?'grid':'none';$('#specificDate').required=on;$('#specificDate').min=new Date().toISOString().slice(0,10);}
 $('#create').onclick=()=>openAlert();$('#create2').onclick=()=>openAlert();$('#close').onclick=closeAlert;$('#modal').onclick=e=>{if(e.target.id==='modal')closeAlert()};
 $('#modalProvider').onchange=()=>loadModalMovies($('#modalProvider').value,$('#modalCity').value);
 $('#modalCity').onchange=()=>loadModalMovies($('#modalProvider').value,$('#modalCity').value);
 $('#movieSelect').onchange=loadModalTheatres;
-function syncAvailableDate(){if($('#liveAvailableDate')&&$('#modalDate').value==='Specific date')$('#liveAvailableDate').value=$('#specificDate').value||'';} $('#modalDate').onchange=()=>{syncSpecificDate();syncAvailableDate();if($('#movieSelect').value)loadModalTheatres();};
+function syncAvailableDate(){if($('#liveAvailableDate')&&$('#modalDate').value==='Specific date')$('#liveAvailableDate').value=$('#specificDate').value||'';} $('#modalDate').onchange=()=>{syncSpecificDate();syncAvailableDate();if($('#modalDate').value!=='Specific date'&&$('#liveAvailableDate'))$('#liveAvailableDate').value='';if($('#movieSelect').value)loadModalTheatres();};
+$('#liveAvailableDate').onchange=()=>{const v=$('#liveAvailableDate').value;if(v){$('#modalDate').value='Specific date';$('#specificDate').value=v;syncSpecificDate();}if($('#movieSelect').value)loadModalTheatres();};
 const API_SUBMIT=API_BASE;
 let alertSubmitting=false;
 async function apiCreateAlert(payload){const r=await fetch(API_SUBMIT+'/api/alerts',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify(payload)});let data={};try{data=await r.json()}catch{}if(!r.ok)throw new Error(data.error||'Alert service is unavailable');return data}
@@ -401,12 +499,31 @@ $('#form').onsubmit=async e=>{
   if(!email)return toast('Email required','Enter an email for alerts.');
   if(!selectedMovie)return toast('Movie required','Select a current movie from the live provider list.');
   if(!theatres.length)return toast('Theatre required','Select at least one live theatre.');
+  if(!sources.length)return toast('Booking source required','Select at least one source to monitor.');
   const datePref=$('#modalDate').value;const specificDate=datePref==='Specific date'?$('#specificDate').value:'';
   if(datePref==='Specific date'&&!specificDate)return toast('Date required','Choose the date you want CinePing to watch.');
-  const provider=$('#modalProvider').value;
-  const a={movie:selectedMovie.title,city:$('#modalCity').value,theatres,language:$('#modalLang').value,format:$('#modalFormat').value,time:$('#modalTime').value,date:datePref,specificDate,sources,status:'ARMED',provider,providerMovieId:selectedMovie.id};
-  const submit=e.submitter;alertSubmitting=true;if(submit){submit.disabled=true;submit.textContent='Creating…'};toast('Creating alert','Saving your watch securely…');
-  try{const result=await apiCreateAlert({...a,email});prefs.email=email;alerts=[a,...alerts];save();closeAlert();renderAll();openSuccess(result.emailSent?selectedMovie.title+' is registered. Live '+provider+' monitoring has started; a confirmation email was also sent.':selectedMovie.title+' is registered and live monitoring has started. The confirmation email could not be sent.')}catch(err){toast('Could not create alert',err.message||'Please try again.')}finally{alertSubmitting=false;if(submit){submit.disabled=false;submit.textContent='Create alert →'}}
+  const primaryProvider=$('#modalProvider').value;
+  const providerMovies={};
+  const missing=[];
+  alertSubmitting=true;
+  const submit=e.submitter;if(submit){submit.disabled=true;submit.textContent='Creating…'}
+  toast('Creating alert','Saving your watch securely…');
+  try{
+    for(const source of sources){
+      try{
+        const cat=await getCatalog(source,$('#modalCity').value,false);
+        const hit=cat.find(m=>normalizeTitleClient(m.title)===normalizeTitleClient(selectedMovie.title));
+        if(hit)providerMovies[source]=hit.id;else missing.push(source);
+      }catch{missing.push(source);}
+    }
+    if(!Object.keys(providerMovies).length)throw new Error('This movie is not available from the selected booking sources right now.');
+    const a={movie:selectedMovie.title,city:$('#modalCity').value,theatres,language:$('#modalLang').value,format:$('#modalFormat').value,time:$('#modalTime').value,date:datePref,specificDate,sources,status:'ARMED',provider:primaryProvider,providerMovieId:providerMovies[primaryProvider]||selectedMovie.id,providerMovies};
+    const result=await apiCreateAlert({...a,email});
+    prefs.email=email;alerts=[a,...alerts];save();closeAlert();renderAll();
+    const sourceText=Object.keys(providerMovies).join(' + ');
+    openSuccess(result.emailSent?selectedMovie.title+' is registered across '+sourceText+'. Live monitoring has started and the confirmation email was sent.':selectedMovie.title+' is registered across '+sourceText+'. Live monitoring has started.');
+  }catch(err){toast('Could not create alert',err.message||'Please try again.')}
+  finally{alertSubmitting=false;if(submit){submit.disabled=false;submit.textContent='Create alert →'}}
 };
 $('#q').oninput=()=>{renderMovies();renderAlerts()};
 $('#city').onchange=()=>{prefs.city=$('#city').value||prefs.city;$('#cityPill').textContent='⌖ '+(prefs.city||'Hyderabad');loadLiveMovies(liveMovieProvider,prefs.city||'Hyderabad',true)};
