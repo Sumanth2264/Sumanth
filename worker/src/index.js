@@ -292,6 +292,13 @@ async function setMonitorState(env, patch) {
   ).run();
 }
 
+function parseStoredTime(value) {
+  const direct = Date.parse(String(value || ""));
+  if (Number.isFinite(direct)) return direct;
+  const utc = Date.parse(String(value || "") + "Z");
+  return Number.isFinite(utc) ? utc : NaN;
+}
+
 function monitorIntervalMinutes(env) {
   const n = Number(env.MONITOR_INTERVAL_MINUTES || 360);
   return Number.isFinite(n) && n >= 5 ? Math.floor(n) : 360;
@@ -434,23 +441,23 @@ export default {
       const nowIso = now.toISOString();
       try {
         const state = await getMonitorState(env);
-        if (state?.next_run_at && Date.parse(state.next_run_at + "Z") > now.getTime()) return;
+        if (state?.next_run_at && parseStoredTime(state.next_run_at) > now.getTime()) return;
 
-        await setMonitorState(env, { last_run_at: nowIso, next_run_at: new Date(now.getTime() + monitorIntervalMinutes(env) * 60000).toISOString() });
+        await setMonitorState(env, { last_run_at: nowIso, next_run_at: new Date(now.getTime() + monitorIntervalMinutes(env) * 60000).toISOString().replace("Z","") });
 
         const district = await fetchDistrictShows(env);
         if (!district.configured) return;
 
         const result = await processShows(env, district.shows);
         await setMonitorState(env, {
-          last_success_at: new Date().toISOString(),
+          last_success_at: new Date().toISOString().replace("Z",""),
           checked: result.checked,
           sent: result.sent,
-          next_run_at: new Date(Date.now() + monitorIntervalMinutes(env) * 60000).toISOString()
+          next_run_at: new Date(Date.now() + monitorIntervalMinutes(env) * 60000).toISOString().replace("Z","")
         });
       } catch (err) {
         await setMonitorState(env, {
-          next_run_at: new Date(Date.now() + 15 * 60000).toISOString()
+          next_run_at: new Date(Date.now() + 15 * 60000).toISOString().replace("Z","")
         });
       }
     })());
