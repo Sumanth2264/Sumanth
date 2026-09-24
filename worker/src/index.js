@@ -89,7 +89,7 @@ function matchTimePreference(alert, show) {
 
 function match(alert, show) {
   if (alert.city && alert.city.toLowerCase() !== String(show.city || "").toLowerCase()) return false;
-  if (alert.movie && alert.movie.toLowerCase() !== String(show.movie || "").toLowerCase()) return false;
+  if (alert.movie && normalizeTitle(alert.movie) !== normalizeTitle(show.movie)) return false;
 
   const theatres = parseJsonArray(alert.theatres);
   if (theatres.length && !theatres.some((x) => String(x).toLowerCase() === String(show.theatre || "").toLowerCase())) return false;
@@ -150,146 +150,32 @@ async function processShows(env, shows) {
   return { sent, checked };
 }
 
+
 const DISTRICT_MOVIES_URL = "https://api.parse.bot/scraper/9dbc34b2-b7c3-4e9b-9540-6d2bb2568c57/get_movies_in_theaters";
 const DISTRICT_SHOWTIMES_URL = "https://api.parse.bot/scraper/9dbc34b2-b7c3-4e9b-9540-6d2bb2568c57/get_movie_showtimes";
 
-function normalizeTitle(s) {
-  return String(s || "")
+const MONTHLY_CREDIT_CAP = 190;
+const MAX_SHOWTIME_CALLS_PER_TARGET = 12;
+const CREATION_BURST_CALLS = 5;
+const BURST_INTERVAL_MINUTES = 20;
+const NEAR_DATE_INTERVAL_MINUTES = 720;
+const NORMAL_INTERVAL_MINUTES = 2880;
+const MOVIE_CACHE_HOURS = 168;
+
+function normalizeTitle(value) {
+  return String(value || "")
     .toLowerCase()
     .replace(/&/g, "and")
     .replace(/[^a-z0-9]+/g, " ")
     .trim();
 }
 
-function districtHeaders(env) {
-  return {
-    "accept": "application/json",
-    "x-api-key": env.PARSE_API_KEY
-  };
+function monthKey(date = new Date()) {
+  return date.toISOString().slice(0, 7);
 }
 
-async function districtGet(url, params, env) {
-  const qs = new URLSearchParams(params);
-  const r = await fetch(url + "?" + qs.toString(), {
-    method: "GET",
-    headers: districtHeaders(env),
-    cf: { cacheTtl: 0, cacheEverything: false }
-  });
-  const textBody = await r.text();
-  let data = {};
-  try { data = JSON.parse(textBody); } catch {}
-  if (!r.ok) throw new Error("District feed returned " + r.status);
-  return data;
-}
-
-async function fetchDistrictShows(env) {
-  if (!env.PARSE_API_KEY || !env.DB) return { configured: false, shows: [] };
-
-  const all = await env.DB.prepare("SELECT * FROM alerts WHERE status='active'").all();
-  const alerts = all.results || [];
-  if (!alerts.length) return { configured: true, shows: [] };
-
-  const groups = new Map();
-  for (const alert of alerts) {
-    const city = String(alert.city || "").trim();
-    const movie = String(alert.movie || "").trim();
-    if (!city || !movie) continue;
-    const key = city.toLowerCase() + "|" + normalizeTitle(movie);
-    if (!groups.has(key)) groups.set(key, { city, movie });
-  }
-
-  const shows = [];
-
-  for (const group of groups.values()) {
-    const moviesData = await fetchDistrictMoviesCached(env, group.city);
-    const movies = Array.isArray(moviesData.movies)
-      ? moviesData.movies
-      : Array.isArray(moviesData?.data?.movies) ? moviesData.data.movies : [];
-
-    const wanted = normalizeTitle(group.movie);
-    const movie = movies.find(m =>
-      normalizeTitle(m.title || m.name) === wanted
-    ) || movies.find(m =>
-      normalizeTitle(m.title || m.name).includes(wanted) ||
-      wanted.includes(normalizeTitle(m.title || m.name))
-    );
-
-    if (!movie) continue;
-
-    const movieId = movie.movie_id || movie.id;
-    if (!movieId) continue;
-
-    const detail = await districtGet(
-      DISTRICT_SHOWTIMES_URL,
-      { movie_id: String(movieId), city: group.city },
-      env
-    );
-
-    const theatres = Array.isArray(detail.theatres)
-      ? detail.theatres
-      : Array.isArray(detail?.data?.theatres) ? detail.data.theatres : [];
-
-    const showDates = Array.isArray(detail.show_dates)
-      ? detail.show_dates
-      : Array.isArray(detail?.data?.show_dates) ? detail.data.show_dates : [];
-
-    for (const theatre of theatres) {
-      const theatreName = theatre.name || theatre.theatre_name || "";
-      const slots = Array.isArray(theatre.showtimes)
-        ? theatre.showtimes
-        : Array.isArray(theatre.shows) ? theatre.shows : [];
-
-      for (const slot of slots) {
-        const date = slot.date || detail.date || showDates[0] || "";
-        const time = slot.time || slot.show_time || slot.start_time || "";
-        const formats = [slot.screen_format, slot.format, slot.auditorium_format].filter(Boolean).map(String);
-        const languages = [slot.language, slot.lang].filter(Boolean).map(String);
-        const bookingUrl = slot.booking_url || slot.bookingUrl || slot.book_now_url || theatre.booking_url || "";
-
-        shows.push({
-          movie: movie.title || group.movie,
-          city: group.city,
-          theatre: theatreName,
-          date,
-          time,
-          formats,
-          languages,
-          source: "District",
-          bookingUrl,
-          isFdfs: Boolean(slot.is_fdfs || slot.isFdfs),
-          isReleaseDay: Boolean(slot.is_release_day || slot.isReleaseDay)
-        });
-      }
-    }
-  }
-
-  return { configured: true, shows };
-}
-
-async function ensureMonitorTables(env) {
-  await env.DB.prepare(
-    "CREATE TABLE IF NOT EXISTS monitor_state (id INTEGER PRIMARY KEY CHECK(id=1), last_run_at TEXT, last_success_at TEXT, next_run_at TEXT, checked INTEGER DEFAULT 0, sent INTEGER DEFAULT 0)"
-  ).run();
-  await env.DB.prepare(
-    "CREATE TABLE IF NOT EXISTS district_movie_cache (cache_key TEXT PRIMARY KEY, payload TEXT NOT NULL, fetched_at TEXT NOT NULL)"
-  ).run();
-}
-
-async function getMonitorState(env) {
-  await ensureMonitorTables(env);
-  return await env.DB.prepare("SELECT * FROM monitor_state WHERE id=1").first();
-}
-
-async function setMonitorState(env, patch) {
-  await ensureMonitorTables(env);
-  const current = await getMonitorState(env) || { last_run_at:null, last_success_at:null, next_run_at:null, checked:0, sent:0 };
-  const merged = { ...current, ...patch };
-  await env.DB.prepare(
-    "INSERT INTO monitor_state(id,last_run_at,last_success_at,next_run_at,checked,sent) VALUES(1,?,?,?,?,?) ON CONFLICT(id) DO UPDATE SET last_run_at=excluded.last_run_at,last_success_at=excluded.last_success_at,next_run_at=excluded.next_run_at,checked=excluded.checked,sent=excluded.sent"
-  ).bind(
-    merged.last_run_at, merged.last_success_at, merged.next_run_at,
-    Number(merged.checked || 0), Number(merged.sent || 0)
-  ).run();
+function isoNoZ(date) {
+  return new Date(date).toISOString().replace("Z", "");
 }
 
 function parseStoredTime(value) {
@@ -299,44 +185,444 @@ function parseStoredTime(value) {
   return Number.isFinite(utc) ? utc : NaN;
 }
 
-function monitorIntervalMinutes(env) {
-  const n = Number(env.MONITOR_INTERVAL_MINUTES || 360);
-  return Number.isFinite(n) && n >= 5 ? Math.floor(n) : 360;
+function districtHeaders(env) {
+  return {
+    "accept": "application/json",
+    "x-api-key": env.PARSE_API_KEY
+  };
 }
 
-async function fetchDistrictMoviesCached(env, city) {
+async function ensureMonitorTables(env) {
+  await env.DB.prepare(
+    "CREATE TABLE IF NOT EXISTS monitor_usage (month TEXT PRIMARY KEY, credits_used INTEGER NOT NULL DEFAULT 0, catalog_calls INTEGER NOT NULL DEFAULT 0, showtime_calls INTEGER NOT NULL DEFAULT 0)"
+  ).run();
+
+  await env.DB.prepare(
+    "CREATE TABLE IF NOT EXISTS monitor_targets (target_key TEXT PRIMARY KEY, city TEXT NOT NULL, movie TEXT NOT NULL, date_pref TEXT NOT NULL DEFAULT 'Any date', specific_date TEXT NOT NULL DEFAULT '', movie_id TEXT NOT NULL DEFAULT '', active INTEGER NOT NULL DEFAULT 1, next_poll_at TEXT NOT NULL, burst_remaining INTEGER NOT NULL DEFAULT 0, usage_month TEXT NOT NULL DEFAULT '', showtime_calls_month INTEGER NOT NULL DEFAULT 0, last_polled_at TEXT, last_success_at TEXT, last_match_at TEXT)"
+  ).run();
+
+  await env.DB.prepare(
+    "CREATE TABLE IF NOT EXISTS district_movie_cache (cache_key TEXT PRIMARY KEY, payload TEXT NOT NULL, fetched_at TEXT NOT NULL)"
+  ).run();
+
+  try {
+    await env.DB.prepare("ALTER TABLE alerts ADD COLUMN date_pref TEXT DEFAULT 'Any date'").run();
+  } catch {}
+  try {
+    await env.DB.prepare("ALTER TABLE alerts ADD COLUMN specific_date TEXT DEFAULT ''").run();
+  } catch {}
+
+  await env.DB.prepare(
+    "INSERT OR IGNORE INTO monitor_usage(month,credits_used,catalog_calls,showtime_calls) VALUES(?,0,0,0)"
+  ).bind(monthKey()).run();
+}
+
+async function getUsage(env) {
+  await ensureMonitorTables(env);
+  return await env.DB.prepare("SELECT * FROM monitor_usage WHERE month=?")
+    .bind(monthKey()).first();
+}
+
+async function reserveCredits(env, cost, kind) {
+  await ensureMonitorTables(env);
+  const month = monthKey();
+  const r = await env.DB.prepare(
+    "UPDATE monitor_usage SET credits_used=credits_used+?, " +
+    "catalog_calls=catalog_calls+CASE WHEN ?='catalog' THEN 1 ELSE 0 END, " +
+    "showtime_calls=showtime_calls+CASE WHEN ?='showtime' THEN 1 ELSE 0 END " +
+    "WHERE month=? AND credits_used+?<=?"
+  ).bind(cost, kind, kind, month, cost, MONTHLY_CREDIT_CAP).run();
+  return Number(r.meta?.changes || 0) === 1;
+}
+
+async function releaseCredits(env, cost, kind) {
+  const sql = kind === "catalog"
+    ? "UPDATE monitor_usage SET credits_used=MAX(0,credits_used-?),catalog_calls=MAX(0,catalog_calls-1) WHERE month=?"
+    : "UPDATE monitor_usage SET credits_used=MAX(0,credits_used-?),showtime_calls=MAX(0,showtime_calls-1) WHERE month=?";
+  await env.DB.prepare(sql).bind(cost, monthKey()).run();
+}
+
+async function districtGet(url, params, env, kind, cost) {
+  const reserved = await reserveCredits(env, cost, kind);
+  if (!reserved) throw new Error("CinePing monthly District budget reached");
+
+  try {
+    const qs = new URLSearchParams(params);
+    const r = await fetch(url + "?" + qs.toString(), {
+      method: "GET",
+      headers: districtHeaders(env),
+      cf: { cacheTtl: 0, cacheEverything: false }
+    });
+
+    const body = await r.text();
+    let data = {};
+    try { data = JSON.parse(body); } catch {}
+
+    if (!r.ok) {
+      await releaseCredits(env, cost, kind);
+      throw new Error("District feed returned " + r.status);
+    }
+    return data;
+  } catch (e) {
+    if (e?.message === "CinePing monthly District budget reached") throw e;
+    await releaseCredits(env, cost, kind);
+    throw e;
+  }
+}
+
+async function fetchDistrictMoviesCached(env, city, force = false) {
   const key = String(city || "").toLowerCase();
-  const cached = await env.DB.prepare("SELECT payload,fetched_at FROM district_movie_cache WHERE cache_key=?").bind(key).first();
-  const age = cached?.fetched_at ? Date.now() - Date.parse(cached.fetched_at + "Z") : Infinity;
-  if (cached && Number.isFinite(age) && age < 86400000) {
+  const cached = await env.DB.prepare(
+    "SELECT payload,fetched_at FROM district_movie_cache WHERE cache_key=?"
+  ).bind(key).first();
+
+  const age = cached?.fetched_at
+    ? Date.now() - Date.parse(cached.fetched_at + "Z")
+    : Infinity;
+
+  if (!force && cached && Number.isFinite(age) && age < MOVIE_CACHE_HOURS * 60 * 60 * 1000) {
     try { return JSON.parse(cached.payload); } catch {}
   }
 
-  const data = await districtGet(DISTRICT_MOVIES_URL, { city }, env);
+  const data = await districtGet(
+    DISTRICT_MOVIES_URL,
+    { city },
+    env,
+    "catalog",
+    2
+  );
+
   await env.DB.prepare(
-    "INSERT INTO district_movie_cache(cache_key,payload,fetched_at) VALUES(?,?,datetime('now')) ON CONFLICT(cache_key) DO UPDATE SET payload=excluded.payload,fetched_at=excluded.fetched_at"
+    "INSERT INTO district_movie_cache(cache_key,payload,fetched_at) VALUES(?,?,datetime('now')) " +
+    "ON CONFLICT(cache_key) DO UPDATE SET payload=excluded.payload,fetched_at=excluded.fetched_at"
   ).bind(key, JSON.stringify(data)).run();
+
   return data;
 }
 
-async function fetchConfiguredFeed(env) {
-  if (!env.SHOWTIME_FEED_URL) return { configured: false, shows: [] };
-  const headers = {};
-  if (env.SHOWTIME_FEED_TOKEN) headers.authorization = "Bearer " + env.SHOWTIME_FEED_TOKEN;
-  const r = await fetch(env.SHOWTIME_FEED_URL, {
-    method: "GET",
-    headers,
-    cf: { cacheTtl: 0, cacheEverything: false }
-  });
-  if (!r.ok) throw new Error("showtime feed returned " + r.status);
-  const data = await r.json();
-  if (Array.isArray(data)) return { configured: true, shows: data };
-  if (Array.isArray(data.shows)) return { configured: true, shows: data.shows };
-  throw new Error("showtime feed must return shows[]");
+function movieList(data) {
+  return Array.isArray(data?.movies)
+    ? data.movies
+    : Array.isArray(data?.data?.movies) ? data.data.movies : [];
+}
+
+function findMovie(data, title) {
+  const wanted = normalizeTitle(title);
+  const movies = movieList(data);
+
+  return movies.find((m) =>
+    normalizeTitle(m.title || m.name) === wanted
+  ) || movies.find((m) => {
+    const name = normalizeTitle(m.title || m.name);
+    return name && (name.includes(wanted) || wanted.includes(name));
+  }) || null;
+}
+
+function releaseDateFromMovie(movie) {
+  const raw = Number(movie?.release_date || 0);
+  if (!raw) return "";
+  const ms = raw < 100000000000 ? raw * 1000 : raw;
+  return new Date(ms).toISOString().slice(0, 10);
+}
+
+function nextDay(date) {
+  const d = new Date(String(date || "") + "T00:00:00Z");
+  if (Number.isNaN(d.getTime())) return "";
+  d.setUTCDate(d.getUTCDate() + 1);
+  return d.toISOString().slice(0, 10);
+}
+
+function requestedDate(alert, movie) {
+  const pref = String(alert.date_pref || "Any date");
+  if (pref === "Specific date" && alert.specific_date) return alert.specific_date;
+
+  const release = releaseDateFromMovie(movie);
+  if (pref === "Release day" || String(alert.time_pref || "") === "FDFS only") return release;
+  if (pref === "Next day") return nextDay(release);
+
+  return "";
+}
+
+function showtimeTheatres(detail) {
+  return Array.isArray(detail?.theatres)
+    ? detail.theatres
+    : Array.isArray(detail?.data?.theatres)
+      ? detail.data.theatres
+      : [];
+}
+
+function normalizeShowSlots(detail, movie, city, releaseDate) {
+  const result = [];
+  for (const theatre of showtimeTheatres(detail)) {
+    const theatreName = theatre.name || theatre.theatre_name || "";
+    const slots = Array.isArray(theatre.showtimes)
+      ? theatre.showtimes
+      : Array.isArray(theatre.shows) ? theatre.shows : [];
+
+    const derivedTimes = slots
+      .map((slot) => String(slot.time || slot.show_time || slot.start_time || ""))
+      .filter(Boolean)
+      .sort((a, b) => {
+        const am = normalizeTimeToMinutes(a) ?? 9999;
+        const bm = normalizeTimeToMinutes(b) ?? 9999;
+        return am - bm;
+      });
+
+    const firstTime = derivedTimes[0] || "";
+
+    for (const slot of slots) {
+      const date = String(slot.date || detail.date || "");
+      const time = String(slot.time || slot.show_time || slot.start_time || "");
+      const formats = [
+        slot.screen_format,
+        slot.format,
+        slot.auditorium_format
+      ].filter(Boolean).map(String);
+      const languages = [
+        slot.language,
+        slot.lang
+      ].filter(Boolean).map(String);
+
+      const explicitFdfs = Boolean(slot.is_fdfs || slot.isFdfs);
+      const derivedFdfs = Boolean(releaseDate && date === releaseDate && time && time === firstTime);
+
+      result.push({
+        movie: movie.title || movie.name || "",
+        city,
+        theatre: theatreName,
+        date,
+        time,
+        formats,
+        languages,
+        source: "District",
+        bookingUrl: slot.booking_url || slot.bookingUrl || slot.book_now_url || theatre.booking_url || "",
+        availableSeats: slot.available_seats ?? slot.availableSeats ?? null,
+        totalSeats: slot.total_seats ?? slot.totalSeats ?? null,
+        isFdfs: explicitFdfs || derivedFdfs,
+        isReleaseDay: Boolean(releaseDate && date === releaseDate),
+        isWeekend: Boolean(slot.is_weekend || slot.isWeekend)
+      });
+    }
+  }
+  return result;
+}
+
+function alertTargetKey(alert) {
+  const datePart =
+    alert.date_pref === "Specific date" && alert.specific_date
+      ? alert.specific_date
+      : String(alert.date_pref || "Any date");
+
+  return [
+    String(alert.city || "").toLowerCase(),
+    normalizeTitle(alert.movie),
+    datePart.toLowerCase()
+  ].join("|");
+}
+
+function dateDistanceDays(dateString) {
+  if (!dateString) return null;
+  const d = new Date(dateString + "T00:00:00Z");
+  if (Number.isNaN(d.getTime())) return null;
+
+  const now = new Date();
+  const today = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
+  return Math.round((d - today) / 86400000);
+}
+
+async function upsertTarget(env, alert, burst = true) {
+  await ensureMonitorTables(env);
+  const key = alertTargetKey(alert);
+  const current = await env.DB.prepare(
+    "SELECT * FROM monitor_targets WHERE target_key=?"
+  ).bind(key).first();
+
+  const now = isoNoZ(new Date());
+  const burstRemaining = Math.max(Number(current?.burst_remaining || 0), burst ? CREATION_BURST_CALLS : 0);
+
+  if (!current) {
+    await env.DB.prepare(
+      "INSERT INTO monitor_targets(target_key,city,movie,date_pref,specific_date,movie_id,active,next_poll_at,burst_remaining,usage_month,showtime_calls_month) VALUES(?,?,?,?,?,?,1,?,?,?,0)"
+    ).bind(
+      key,
+      alert.city || "",
+      alert.movie || "",
+      alert.date_pref || "Any date",
+      alert.specific_date || "",
+      "",
+      now,
+      burstRemaining,
+      monthKey()
+    ).run();
+  } else {
+    await env.DB.prepare(
+      "UPDATE monitor_targets SET active=1,city=?,movie=?,date_pref=?,specific_date=?,next_poll_at=?,burst_remaining=?,usage_month=?,showtime_calls_month=CASE WHEN usage_month=? THEN showtime_calls_month ELSE 0 END WHERE target_key=?"
+    ).bind(
+      alert.city || current.city,
+      alert.movie || current.movie,
+      alert.date_pref || current.date_pref,
+      alert.specific_date || current.specific_date || "",
+      now,
+      burstRemaining,
+      monthKey(),
+      monthKey(),
+      key
+    ).run();
+  }
+
+  return key;
+}
+
+async function loadAlertsForTarget(env, target) {
+  const all = await env.DB.prepare(
+    "SELECT * FROM alerts WHERE status='active' AND LOWER(city)=LOWER(?)"
+  ).bind(target.city).all();
+
+  return (all.results || []).filter((a) => alertTargetKey(a) === target.target_key);
+}
+
+async function pollTarget(env, targetKey, immediate = false) {
+  await ensureMonitorTables(env);
+  const target = await env.DB.prepare(
+    "SELECT * FROM monitor_targets WHERE target_key=?"
+  ).bind(targetKey).first();
+
+  if (!target || !target.active || !env.PARSE_API_KEY) return { checked: 0, sent: 0, skipped: true };
+
+  const alerts = await loadAlertsForTarget(env, target);
+  if (!alerts.length) {
+    await env.DB.prepare("UPDATE monitor_targets SET active=0 WHERE target_key=?").bind(targetKey).run();
+    return { checked: 0, sent: 0 };
+  }
+
+  const targetAlert = alerts[0];
+  const usageMonth = monthKey();
+  const targetCalls = target.usage_month === usageMonth
+    ? Number(target.showtime_calls_month || 0)
+    : 0;
+
+  if (targetCalls >= MAX_SHOWTIME_CALLS_PER_TARGET) {
+    const nextMonth = new Date();
+    nextMonth.setUTCMonth(nextMonth.getUTCMonth() + 1, 1);
+    nextMonth.setUTCHours(0, 5, 0, 0);
+    await env.DB.prepare(
+      "UPDATE monitor_targets SET usage_month=?,showtime_calls_month=0,next_poll_at=? WHERE target_key=?"
+    ).bind(monthKey(nextMonth), isoNoZ(nextMonth), targetKey).run();
+    return { checked: 0, sent: 0, skipped: true, reason: "target-month-cap" };
+  }
+
+  const movieData = await fetchDistrictMoviesCached(env, target.city, immediate);
+  const movie = findMovie(movieData, target.movie);
+
+  if (!movie) {
+    const next = new Date(Date.now() + NORMAL_INTERVAL_MINUTES * 60000);
+    await env.DB.prepare(
+      "UPDATE monitor_targets SET last_polled_at=?,next_poll_at=? WHERE target_key=?"
+    ).bind(isoNoZ(new Date()), isoNoZ(next), targetKey).run();
+    return { checked: 0, sent: 0, reason: "movie-not-found" };
+  }
+
+  const movieId = String(movie.movie_id || movie.id || "");
+  if (!movieId) return { checked: 0, sent: 0, reason: "movie-id-missing" };
+
+  const requested = requestedDate(targetAlert, movie);
+  const params = { movie_id: movieId, city: target.city };
+  if (requested) params.date = requested;
+
+  const detail = await districtGet(
+    DISTRICT_SHOWTIMES_URL,
+    params,
+    env,
+    "showtime",
+    1
+  );
+
+  const shows = normalizeShowSlots(detail, movie, target.city, releaseDateFromMovie(movie));
+  const result = await processShows(env, shows);
+
+  const newCalls = targetCalls + 1;
+  const burstRemaining = Math.max(0, Number(target.burst_remaining || 0) - 1);
+
+  let nextDelayMinutes;
+  if (result.sent > 0) {
+    nextDelayMinutes = 1440;
+  } else if (burstRemaining > 0) {
+    nextDelayMinutes = BURST_INTERVAL_MINUTES;
+  } else {
+    const dist = dateDistanceDays(requested);
+    if (dist !== null && dist >= -1 && dist <= 1) {
+      nextDelayMinutes = BURST_INTERVAL_MINUTES;
+    } else if (dist !== null && Math.abs(dist) <= 3) {
+      nextDelayMinutes = NEAR_DATE_INTERVAL_MINUTES;
+    } else {
+      nextDelayMinutes = NORMAL_INTERVAL_MINUTES;
+    }
+  }
+
+  const next = new Date(Date.now() + nextDelayMinutes * 60000);
+  await env.DB.prepare(
+    "UPDATE monitor_targets SET movie_id=?,last_polled_at=?,last_success_at=?,last_match_at=CASE WHEN ? > 0 THEN ? ELSE last_match_at END,next_poll_at=?,burst_remaining=?,usage_month=?,showtime_calls_month=? WHERE target_key=?"
+  ).bind(
+    movieId,
+    isoNoZ(new Date()),
+    isoNoZ(new Date()),
+    result.sent,
+    isoNoZ(new Date()),
+    isoNoZ(next),
+    burstRemaining,
+    usageMonth,
+    newCalls,
+    targetKey
+  ).run();
+
+  return { ...result, movieId, nextPollAt: isoNoZ(next) };
+}
+
+async function processDueTargets(env, limit = 1) {
+  await ensureMonitorTables(env);
+  const rows = await env.DB.prepare(
+    "SELECT * FROM monitor_targets WHERE active=1"
+  ).all();
+
+  const now = Date.now();
+  const due = (rows.results || [])
+    .filter((row) => {
+      const t = parseStoredTime(row.next_poll_at);
+      return Number.isFinite(t) && t <= now;
+    })
+    .sort((a, b) => {
+      const ab = Number(a.burst_remaining || 0) > 0 ? 0 : 1;
+      const bb = Number(b.burst_remaining || 0) > 0 ? 0 : 1;
+      if (ab !== bb) return ab - bb;
+
+      const ad = dateDistanceDays(String(a.date_pref || "") === "Specific date" ? String(a.specific_date || "") : "");
+      const bd = dateDistanceDays(String(b.date_pref || "") === "Specific date" ? String(b.specific_date || "") : "");
+      if (ad !== null && bd !== null) return Math.abs(ad) - Math.abs(bd);
+      return parseStoredTime(a.next_poll_at) - parseStoredTime(b.next_poll_at);
+    })
+    .slice(0, limit);
+
+  let checked = 0;
+  let sent = 0;
+
+  for (const row of due) {
+    try {
+      const result = await pollTarget(env, row.target_key, false);
+      checked += result.checked || 0;
+      sent += result.sent || 0;
+    } catch {
+      const retry = new Date(Date.now() + 15 * 60000);
+      await env.DB.prepare(
+        "UPDATE monitor_targets SET next_poll_at=? WHERE target_key=?"
+      ).bind(isoNoZ(retry), row.target_key).run();
+    }
+  }
+
+  return { checked, sent };
 }
 
 export default {
-  async fetch(req, env) {
+  async fetch(req, env, ctx) {
     if (req.method === "OPTIONS") {
       const origin = req.headers.get("Origin") || "";
       return new Response(null, {
@@ -351,7 +637,22 @@ export default {
     const u = new URL(req.url);
 
     if (u.pathname === "/api/health" && req.method === "GET") {
-      return json(env, { ok: true, service: "cineping-alert-api", version: "2026-09-26-district-v2", d1: !!env.DB, mailConfigured: !!(env.BREVO_API_KEY && env.BREVO_FROM_EMAIL), districtConfigured: !!env.PARSE_API_KEY, schedulerConfigured: !!(env.PARSE_API_KEY || env.SHOWTIME_FEED_URL) });
+      const usage = env.DB ? await getUsage(env) : null;
+      return json(env, {
+        ok: true,
+        service: "cineping-alert-api",
+        version: "2026-09-26-district-monitor-v3",
+        d1: !!env.DB,
+        mailConfigured: !!(env.BREVO_API_KEY && env.BREVO_FROM_EMAIL),
+        districtConfigured: !!env.PARSE_API_KEY,
+        schedulerConfigured: !!env.PARSE_API_KEY,
+        monthlyBudget: MONTHLY_CREDIT_CAP,
+        usage: usage ? {
+          credits: Number(usage.credits_used || 0),
+          catalogCalls: Number(usage.catalog_calls || 0),
+          showtimeCalls: Number(usage.showtime_calls || 0)
+        } : null
+      });
     }
 
     if (u.pathname === "/api/alerts" && req.method === "POST") {
@@ -363,24 +664,34 @@ export default {
         if (!email || !movie) return json(env, { error: "email and movie are required" }, 400);
         if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return json(env, { error: "valid email required" }, 400);
 
+        await ensureMonitorTables(env);
+
         const id = crypto.randomUUID();
         const token = crypto.randomUUID() + crypto.randomUUID();
+        const city = String(b.city || "");
+        const datePref = String(b.date || "Any date");
+        const specificDate = String(b.specificDate || "");
 
         await env.DB.prepare(
-          "INSERT INTO alerts(id,email,movie,city,theatres,language,format,time_pref,source,status,manage_token,created_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,datetime('now'))"
+          "INSERT INTO alerts(id,email,movie,city,theatres,language,format,time_pref,date_pref,specific_date,source,status,manage_token,created_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,datetime('now'))"
         ).bind(
           id,
           email,
           movie,
-          String(b.city || ""),
+          city,
           JSON.stringify(Array.isArray(b.theatres) ? b.theatres : []),
           String(b.language || "Any"),
           String(b.format || "Any"),
           String(b.time || "Any time"),
+          datePref,
+          specificDate,
           JSON.stringify(Array.isArray(b.sources) && b.sources.length ? b.sources : ["Any"]),
           "active",
           token
         ).run();
+
+        const alertRow = await env.DB.prepare("SELECT * FROM alerts WHERE id=?").bind(id).first();
+        const targetKey = await upsertTarget(env, alertRow, true);
 
         let emailSent = false;
         try {
@@ -389,30 +700,48 @@ export default {
             email,
             "CinePing alert armed · " + movie,
             "<p>Your CinePing alert for <strong>" + esc(movie) + "</strong> in <strong>" +
-            esc(b.city || "India") + "</strong> is active.</p>" +
+            esc(city || "India") + "</strong> is active.</p>" +
             "<p>Selected theatres: " + esc((b.theatres || []).join(", ") || "Any matching theatre") + ".</p>" +
-            "<p>When an authorised showtime feed matches your rule, CinePing will email you with the official booking page.</p>"
+            "<p>CinePing will check District for matching showtimes and email you when a matching booking appears.</p>"
           );
           emailSent = true;
-        } catch {
-          // The alert is intentionally kept in D1 even if the confirmation email fails.
-          // This lets the user continue while email configuration is diagnosed separately.
+        } catch {}
+
+        if (ctx?.waitUntil) {
+          ctx.waitUntil(
+            pollTarget(env, targetKey, true).catch(async () => {
+              await env.DB.prepare(
+                "UPDATE monitor_targets SET next_poll_at=? WHERE target_key=?"
+              ).bind(isoNoZ(new Date(Date.now() + 15 * 60000)), targetKey).run();
+            })
+          );
         }
 
-        return json(env, { ok: true, id, emailSent }, 201);
-      } catch (e) {
+        return json(env, { ok: true, id, emailSent, monitorStarted: true }, 201);
+      } catch {
         return json(env, { error: "could not create alert" }, 500);
       }
     }
 
     if (u.pathname === "/api/monitor-status" && req.method === "GET") {
       try {
-        const state = await getMonitorState(env);
+        const usage = await getUsage(env);
+        const targets = await env.DB.prepare(
+          "SELECT target_key,city,movie,date_pref,specific_date,movie_id,next_poll_at,burst_remaining,usage_month,showtime_calls_month,last_polled_at,last_match_at FROM monitor_targets WHERE active=1 ORDER BY next_poll_at"
+        ).all();
+
         return json(env, {
           ok: true,
           districtConfigured: !!env.PARSE_API_KEY,
-          intervalMinutes: monitorIntervalMinutes(env),
-          state: state || null
+          monthlyBudget: MONTHLY_CREDIT_CAP,
+          usage: usage ? {
+            month: usage.month,
+            credits: Number(usage.credits_used || 0),
+            remaining: Math.max(0, MONTHLY_CREDIT_CAP - Number(usage.credits_used || 0)),
+            catalogCalls: Number(usage.catalog_calls || 0),
+            showtimeCalls: Number(usage.showtime_calls || 0)
+          } : null,
+          targets: targets.results || []
         });
       } catch {
         return json(env, { error: "monitor status unavailable" }, 500);
@@ -436,30 +765,22 @@ export default {
 
   async scheduled(event, env, ctx) {
     ctx.waitUntil((async () => {
-      if (!env.DB) return;
-      const now = new Date();
-      const nowIso = now.toISOString();
       try {
-        const state = await getMonitorState(env);
-        if (state?.next_run_at && parseStoredTime(state.next_run_at) > now.getTime()) return;
+        const result = await processDueTargets(env, 1);
+        await ensureMonitorTables(env);
+        const current = await getMonitorState(env).catch(() => null);
+        const next = await env.DB.prepare(
+          "SELECT MIN(next_poll_at) AS next_poll_at FROM monitor_targets WHERE active=1"
+        ).first();
 
-        await setMonitorState(env, { last_run_at: nowIso, next_run_at: new Date(now.getTime() + monitorIntervalMinutes(env) * 60000).toISOString().replace("Z","") });
-
-        const district = await fetchDistrictShows(env);
-        if (!district.configured) return;
-
-        const result = await processShows(env, district.shows);
         await setMonitorState(env, {
-          last_success_at: new Date().toISOString().replace("Z",""),
+          last_run_at: isoNoZ(new Date()),
+          last_success_at: isoNoZ(new Date()),
+          next_run_at: next?.next_poll_at || null,
           checked: result.checked,
-          sent: result.sent,
-          next_run_at: new Date(Date.now() + monitorIntervalMinutes(env) * 60000).toISOString().replace("Z","")
+          sent: result.sent
         });
-      } catch (err) {
-        await setMonitorState(env, {
-          next_run_at: new Date(Date.now() + 15 * 60000).toISOString().replace("Z","")
-        });
-      }
+      } catch {}
     })());
   }
 };
