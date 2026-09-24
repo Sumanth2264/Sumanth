@@ -316,9 +316,12 @@ function providerTabs(){$$('#movieProviderTabs button').forEach(b=>b.onclick=()=
 function theatreChoicesFromData(data){
   modalTheatreData=data;const list=Array.isArray(data?.theatres)?data.theatres:[];
   $('#theatreStatus').textContent=list.length?(list.length+' live theatres · '+data.source):'No theatres returned for this movie/date.';
-  $('#choices').innerHTML=list.map(t=>'<button type="button" class="choice" data-t="'+esc(t.name)+'"><strong>'+esc(t.name)+'</strong>'+(t.address?'<small>'+esc(t.address)+'</small>':'')+'</button>').join('')||'<div style="color:var(--subtle);font-size:8px;padding:8px">No theatre listings available.</div>';
-  $$('.choice').forEach(b=>b.onclick=()=>b.classList.toggle('on'));
-  $('#selectAllTheatres').onclick=()=>{const all=$$('.choice');const should=all.some(x=>!x.classList.contains('on'));all.forEach(x=>x.classList.toggle('on',should));};
+  $('#choices').innerHTML=list.map(t=>{
+    const showList=(t.shows||[]).slice(0,4).map(s=>[s.time,s.language,s.format].filter(Boolean).join(' · ')).filter(Boolean);
+    return '<button type="button" class="choice" data-t="'+esc(t.name)+'"><strong>'+esc(t.name)+'</strong>'+(t.address?'<small>'+esc(t.address)+'</small>':'')+(showList.length?'<small>'+esc(showList.join('  |  '))+'</small>':'<small>No showtime details returned</small>')+'</button>';
+  }).join('')||'<div style="color:var(--subtle);font-size:8px;padding:8px">No theatre listings available.</div>';
+  $('.choice').forEach(b=>b.onclick=()=>b.classList.toggle('on'));
+  $('#selectAllTheatres').onclick=()=>{const all=$('.choice');const should=all.some(x=>!x.classList.contains('on'));all.forEach(x=>x.classList.toggle('on',should));};
 }
 function fillMovieMeta(movie){
   const langs=[...new Set(movie?.languages||[])].filter(Boolean),fmts=[...new Set(movie?.formats||[])].filter(Boolean);
