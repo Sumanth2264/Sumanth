@@ -201,7 +201,7 @@ async function fetchDistrictShows(env) {
   const shows = [];
 
   for (const group of groups.values()) {
-    const moviesData = await districtGet(DISTRICT_MOVIES_URL, { city: group.city }, env);
+    const moviesData = await fetchDistrictMoviesCached(env, group.city);
     const movies = Array.isArray(moviesData.movies)
       ? moviesData.movies
       : Array.isArray(moviesData?.data?.movies) ? moviesData.data.movies : [];
@@ -266,6 +266,52 @@ async function fetchDistrictShows(env) {
   return { configured: true, shows };
 }
 
+async function ensureMonitorTables(env) {
+  await env.DB.prepare(
+    "CREATE TABLE IF NOT EXISTS monitor_state (id INTEGER PRIMARY KEY CHECK(id=1), last_run_at TEXT, last_success_at TEXT, next_run_at TEXT, checked INTEGER DEFAULT 0, sent INTEGER DEFAULT 0)"
+  ).run();
+  await env.DB.prepare(
+    "CREATE TABLE IF NOT EXISTS district_movie_cache (cache_key TEXT PRIMARY KEY, payload TEXT NOT NULL, fetched_at TEXT NOT NULL)"
+  ).run();
+}
+
+async function getMonitorState(env) {
+  await ensureMonitorTables(env);
+  return await env.DB.prepare("SELECT * FROM monitor_state WHERE id=1").first();
+}
+
+async function setMonitorState(env, patch) {
+  await ensureMonitorTables(env);
+  const current = await getMonitorState(env) || { last_run_at:null, last_success_at:null, next_run_at:null, checked:0, sent:0 };
+  const merged = { ...current, ...patch };
+  await env.DB.prepare(
+    "INSERT INTO monitor_state(id,last_run_at,last_success_at,next_run_at,checked,sent) VALUES(1,?,?,?,?,?) ON CONFLICT(id) DO UPDATE SET last_run_at=excluded.last_run_at,last_success_at=excluded.last_success_at,next_run_at=excluded.next_run_at,checked=excluded.checked,sent=excluded.sent"
+  ).bind(
+    merged.last_run_at, merged.last_success_at, merged.next_run_at,
+    Number(merged.checked || 0), Number(merged.sent || 0)
+  ).run();
+}
+
+function monitorIntervalMinutes(env) {
+  const n = Number(env.MONITOR_INTERVAL_MINUTES || 360);
+  return Number.isFinite(n) && n >= 5 ? Math.floor(n) : 360;
+}
+
+async function fetchDistrictMoviesCached(env, city) {
+  const key = String(city || "").toLowerCase();
+  const cached = await env.DB.prepare("SELECT payload,fetched_at FROM district_movie_cache WHERE cache_key=?").bind(key).first();
+  const age = cached?.fetched_at ? Date.now() - Date.parse(cached.fetched_at + "Z") : Infinity;
+  if (cached && Number.isFinite(age) && age < 86400000) {
+    try { return JSON.parse(cached.payload); } catch {}
+  }
+
+  const data = await districtGet(DISTRICT_MOVIES_URL, { city }, env);
+  await env.DB.prepare(
+    "INSERT INTO district_movie_cache(cache_key,payload,fetched_at) VALUES(?,?,datetime('now')) ON CONFLICT(cache_key) DO UPDATE SET payload=excluded.payload,fetched_at=excluded.fetched_at"
+  ).bind(key, JSON.stringify(data)).run();
+  return data;
+}
+
 async function fetchConfiguredFeed(env) {
   if (!env.SHOWTIME_FEED_URL) return { configured: false, shows: [] };
   const headers = {};
@@ -298,7 +344,7 @@ export default {
     const u = new URL(req.url);
 
     if (u.pathname === "/api/health" && req.method === "GET") {
-      return json(env, { ok: true, service: "cineping-alert-api", version: "2026-09-26-district-v1", d1: !!env.DB, mailConfigured: !!(env.BREVO_API_KEY && env.BREVO_FROM_EMAIL), districtConfigured: !!env.PARSE_API_KEY, schedulerConfigured: !!(env.PARSE_API_KEY || env.SHOWTIME_FEED_URL) });
+      return json(env, { ok: true, service: "cineping-alert-api", version: "2026-09-26-district-v2", d1: !!env.DB, mailConfigured: !!(env.BREVO_API_KEY && env.BREVO_FROM_EMAIL), districtConfigured: !!env.PARSE_API_KEY, schedulerConfigured: !!(env.PARSE_API_KEY || env.SHOWTIME_FEED_URL) });
     }
 
     if (u.pathname === "/api/alerts" && req.method === "POST") {
@@ -352,6 +398,20 @@ export default {
       }
     }
 
+    if (u.pathname === "/api/monitor-status" && req.method === "GET") {
+      try {
+        const state = await getMonitorState(env);
+        return json(env, {
+          ok: true,
+          districtConfigured: !!env.PARSE_API_KEY,
+          intervalMinutes: monitorIntervalMinutes(env),
+          state: state || null
+        });
+      } catch {
+        return json(env, { error: "monitor status unavailable" }, 500);
+      }
+    }
+
     if (u.pathname === "/api/provider-events" && req.method === "POST") {
       if (req.headers.get("x-ingest-secret") !== env.INGEST_SECRET) return json(env, { error: "unauthorized" }, 401);
       try {
@@ -369,17 +429,31 @@ export default {
 
   async scheduled(event, env, ctx) {
     ctx.waitUntil((async () => {
+      if (!env.DB) return;
+      const now = new Date();
+      const nowIso = now.toISOString();
       try {
+        const state = await getMonitorState(env);
+        if (state?.next_run_at && Date.parse(state.next_run_at + "Z") > now.getTime()) return;
+
+        await setMonitorState(env, { last_run_at: nowIso, next_run_at: new Date(now.getTime() + monitorIntervalMinutes(env) * 60000).toISOString() });
+
         const district = await fetchDistrictShows(env);
-        if (district.configured) {
-          await processShows(env, district.shows);
-          return;
-        }
-        const feed = await fetchConfiguredFeed(env);
-        if (feed.configured) await processShows(env, feed.shows);
-      } catch {
-        // Retry automatically on the next scheduled run.
+        if (!district.configured) return;
+
+        const result = await processShows(env, district.shows);
+        await setMonitorState(env, {
+          last_success_at: new Date().toISOString(),
+          checked: result.checked,
+          sent: result.sent,
+          next_run_at: new Date(Date.now() + monitorIntervalMinutes(env) * 60000).toISOString()
+        });
+      } catch (err) {
+        await setMonitorState(env, {
+          next_run_at: new Date(Date.now() + 15 * 60000).toISOString()
+        });
       }
     })());
+  }
   }
 };
