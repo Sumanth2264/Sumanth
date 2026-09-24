@@ -624,10 +624,22 @@ function normalizeShowSlots(detail, movie, city, releaseDate) {
   return result;
 }
 
+function normalizeProviderDateValue(value) {
+  if (!value) return "";
+  const s = String(value).trim();
+  if (/^\d{8}$/.test(s)) return s.slice(0,4)+"-"+s.slice(4,6)+"-"+s.slice(6,8);
+  if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return s;
+  return "";
+}
+
 function normalizeBmsShows(detail, movie, city, fallbackDate) {
   const venues = Array.isArray(detail?.venues)
     ? detail.venues
     : Array.isArray(detail?.data?.venues) ? detail.data.venues : [];
+  const availableDates = Array.isArray(detail?.available_dates)
+    ? detail.available_dates
+    : Array.isArray(detail?.data?.available_dates) ? detail.data.available_dates : [];
+  const firstAvailable = normalizeProviderDateValue(availableDates[0]);
   const result = [];
   for (const venue of venues) {
     const theatre = venue.venue_name || venue.name || "";
@@ -648,7 +660,7 @@ function normalizeBmsShows(detail, movie, city, fallbackDate) {
         availableSeats: slot.available_seats ?? slot.availableSeats ?? null,
         totalSeats: slot.total_seats ?? slot.totalSeats ?? null,
         isFdfs: Boolean(slot.is_fdfs || slot.isFdfs),
-        isReleaseDay: false,
+        isReleaseDay: Boolean(firstAvailable && normalizeProviderDateValue(slot.date || fallbackDate) === firstAvailable),
         isWeekend: Boolean(slot.is_weekend || slot.isWeekend)
       });
     }
