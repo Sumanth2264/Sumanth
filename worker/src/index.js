@@ -102,17 +102,24 @@ export default {
           token
         ).run();
 
-        await send(
-          env,
-          email,
-          "CinePing alert armed · " + movie,
-          "<p>Your CinePing alert for <strong>" + esc(movie) + "</strong> in <strong>" +
-          esc(b.city || "India") + "</strong> is active.</p>" +
-          "<p>Selected theatres: " + esc((b.theatres || []).join(", ") || "Any matching theatre") + ".</p>" +
-          "<p>When an authorised showtime feed matches your rule, CinePing will email you with the official booking page.</p>"
-        );
+        let emailSent = false;
+        try {
+          await send(
+            env,
+            email,
+            "CinePing alert armed · " + movie,
+            "<p>Your CinePing alert for <strong>" + esc(movie) + "</strong> in <strong>" +
+            esc(b.city || "India") + "</strong> is active.</p>" +
+            "<p>Selected theatres: " + esc((b.theatres || []).join(", ") || "Any matching theatre") + ".</p>" +
+            "<p>When an authorised showtime feed matches your rule, CinePing will email you with the official booking page.</p>"
+          );
+          emailSent = true;
+        } catch {
+          // The alert is intentionally kept in D1 even if the confirmation email fails.
+          // This lets the user continue while email configuration is diagnosed separately.
+        }
 
-        return json(env, { ok: true, id }, 201);
+        return json(env, { ok: true, id, emailSent }, 201);
       } catch (e) {
         return json(env, { error: "could not create alert" }, 500);
       }
