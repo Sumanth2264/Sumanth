@@ -743,17 +743,7 @@ export default {
           emailSent = true;
         } catch {}
 
-        if (ctx?.waitUntil) {
-          ctx.waitUntil(
-            pollTarget(env, targetKey, true).catch(async () => {
-              await env.DB.prepare(
-                "UPDATE monitor_targets SET next_poll_at=? WHERE target_key=?"
-              ).bind(isoNoZ(new Date(Date.now() + 15 * 60000)), targetKey).run();
-            })
-          );
-        }
-
-        return json(env, { ok: true, id, emailSent, monitorStarted: true }, 201);
+        return json(env, { ok: true, id, emailSent, monitorStarted: true, firstCheckQueued: true }, 201);
       } catch {
         return json(env, { error: "could not create alert" }, 500);
       }
@@ -802,7 +792,7 @@ export default {
   async scheduled(event, env, ctx) {
     ctx.waitUntil((async () => {
       try {
-        const result = await processDueTargets(env, 1);
+        const result = await processDueTargets(env, 2);
         await ensureMonitorTables(env);
         const current = await getMonitorState(env).catch(() => null);
         const next = await env.DB.prepare(
