@@ -216,7 +216,7 @@ footer{border-top:1px solid var(--line);padding:23px 0 34px;color:var(--subtle);
       <label class="field">Theatres <span style="color:var(--subtle)" id="theatreStatus">Choose a movie to load its live theatre list</span><button type="button" class="tiny" id="selectAllTheatres" style="justify-self:start">Select all</button><div class="theatreChoices" id="choices"></div></label>
       <div class="row"><label class="field">Language<select id="modalLang"><option>Any</option></select></label><label class="field">Format<select id="modalFormat"><option>Any</option></select></label></div>
       <div class="row"><label class="field">Show window<select id="modalTime"><option>Any time</option><option>FDFS only</option><option>Morning · 6–12</option><option>Afternoon · 12–5</option><option>Evening · 5–10</option><option>Late night · 10+</option></select></label><label class="field">Date preference<select id="modalDate"><option>Any date</option><option>Release day</option><option>Next day</option><option>This weekend</option><option>Specific date</option></select></label></div>
-      <div class="row" id="specificDateWrap" style="display:none"><label class="field">Specific date<input id="specificDate" type="date"></label><div></div></div>
+      <div class="row" id="specificDateWrap" style="display:none"><label class="field">Specific date<input id="specificDate" type="date"></label><div></div></div><div id="liveDateRow" style="display:none;margin-top:6px"><label class="field">Available provider dates<select id="liveAvailableDate"><option value="">Provider default</option></select></label></div>
       <label class="field">Booking sources <span class="checkrow"><label class="check"><input class="source" value="District" type="checkbox" checked> District</label><label class="check"><input class="source" value="BookMyShow" type="checkbox" checked> BookMyShow</label></span></label>
       <label class="field">Email for alerts<input id="email" type="email" required autocomplete="email" placeholder="you@example.com"></label>
       <div class="modalFoot"><small>Movie and theatre choices come from the selected live provider. Your API key stays on the server.</small><button class="btn primary" type="submit">Create alert →</button></div>
@@ -328,15 +328,39 @@ function fillMovieMeta(movie){
   $('#modalLang').innerHTML='<option>Any</option>'+langs.map(x=>'<option>'+esc(x)+'</option>').join('');
   $('#modalFormat').innerHTML='<option>Any</option>'+fmts.map(x=>'<option>'+esc(x)+'</option>').join('');
 }
-async function loadModalTheatres(){
+async function normalizeAvailableDate(v){
+  if(!v)return '';
+  if(typeof v==='object')v=v.date||v.value||v.iso||v.label||'';
+  v=String(v).trim();
+  if(/^\d{4}-\d{2}-\d{2}$/.test(v))return v;
+  if(/^\d{8}$/.test(v))return v.slice(0,4)+'-'+v.slice(4,6)+'-'+v.slice(6,8);
+  const d=new Date(v);
+  return Number.isNaN(d.getTime())?'':d.toISOString().slice(0,10);
+}
+function loadModalTheatres(){
   const movie=modalMovies.find(m=>m.id===$('#movieSelect').value);
-  $('#choices').innerHTML='<div style="color:var(--subtle);font-size:8px;padding:8px">Loading theatres from '+esc($('#modalProvider').value)+'…</div>';
-  $('#theatreStatus').textContent='';
+  const provider=$('#modalProvider').value;
+  $('#choices').innerHTML='<div style="color:var(--subtle);font-size:8px;padding:8px">Loading theatres from '+esc(provider)+'…</div>';
+  $('#theatreStatus').textContent='Contacting '+esc(provider)+' showtime feed…';
   if(!movie){fillMovieMeta(null);return;}
   fillMovieMeta(movie);
   const date=$('#modalDate').value==='Specific date'?$('#specificDate').value:'';
-  try{theatreChoicesFromData(await apiJson('/api/showtimes',{source:$('#modalProvider').value,city:$('#modalCity').value,movieId:movie.id,movie:movie.title,date}))}
-  catch(err){$('#theatreStatus').textContent=err.message||'Could not load live theatres';$('#choices').innerHTML='<div style="color:var(--subtle);font-size:8px;padding:8px">Unable to load live theatres.</div>'}
+  try{
+    const data=await apiJson('/api/showtimes',{source:provider,city:$('#modalCity').value,movieId:movie.id,movie:movie.title,date});
+    theatreChoicesFromData(data);
+    if(!data.theatres?.length && (data.availableDates||[]).length && !date){
+      const first=(data.availableDates||[]).map(normalizeAvailableDate).filter(Boolean).sort().find(x=>x>=new Date().toISOString().slice(0,10));
+      if(first && $('#liveAvailableDate')){
+        $('#liveAvailableDate').value=first;
+        const retry=await apiJson('/api/showtimes',{source:provider,city:$('#modalCity').value,movieId:movie.id,movie:movie.title,date:first});
+        theatreChoicesFromData(retry);
+      }
+    }
+  }catch(err){
+    $('#theatreStatus').textContent=err.message||'Could not load live theatres';
+    $('#choices').innerHTML='<div style="color:var(--subtle);font-size:8px;padding:8px">Unable to load live theatres. <button type="button" class="tiny" id="retryTheatres">Retry</button></div>';
+    $('#retryTheatres')?.addEventListener('click',loadModalTheatres);
+  }
 }
 async function loadModalMovies(provider=$('#modalProvider').value,city=$('#modalCity').value||prefs.city||'Hyderabad',selectedTitle=''){
   $('#modalProvider').value=provider;$('#movieSelect').innerHTML='<option value="">Loading current movies…</option>';$('#movieSelect').disabled=true;
@@ -361,7 +385,7 @@ $('#create').onclick=()=>openAlert();$('#create2').onclick=()=>openAlert();$('#c
 $('#modalProvider').onchange=()=>loadModalMovies($('#modalProvider').value,$('#modalCity').value);
 $('#modalCity').onchange=()=>loadModalMovies($('#modalProvider').value,$('#modalCity').value);
 $('#movieSelect').onchange=loadModalTheatres;
-$('#modalDate').onchange=()=>{syncSpecificDate();if($('#movieSelect').value)loadModalTheatres();};
+function syncAvailableDate(){if($('#liveAvailableDate')&&$('#modalDate').value==='Specific date')$('#liveAvailableDate').value=$('#specificDate').value||'';} $('#modalDate').onchange=()=>{syncSpecificDate();syncAvailableDate();if($('#movieSelect').value)loadModalTheatres();};
 const API_SUBMIT=API_BASE;
 let alertSubmitting=false;
 async function apiCreateAlert(payload){const r=await fetch(API_SUBMIT+'/api/alerts',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify(payload)});let data={};try{data=await r.json()}catch{}if(!r.ok)throw new Error(data.error||'Alert service is unavailable');return data}
