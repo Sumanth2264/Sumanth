@@ -254,7 +254,36 @@ function renderMovies(){const q=$('#q').value.toLowerCase(),c=$('#city').value,l
 function renderAlerts(){const list=alerts;$('#alertCount').textContent=list.length;$('#heroA').textContent=list.length;$('#heroM').textContent=list.filter(a=>a.status==='MATCHED').length;$('#alertGrid').innerHTML=list.map((a,i)=>'<article class="alertCard"><div class="alertHeader"><div><strong>'+esc(a.movie)+'</strong><div class="movieMeta">'+esc(a.city)+' · '+esc(a.date)+'</div></div><span class="status">'+esc(a.status)+'</span></div><div class="alertLine"></div><div class="chips"><span class="chip">'+esc(a.language)+'</span><span class="chip">'+esc(a.format)+'</span><span class="chip">'+esc(a.time)+'</span>'+a.theatres.slice(0,3).map(t=>'<span class="chip">'+esc(t)+'</span>').join('')+'</div><div class="alertActions"><button class="tiny" data-del="'+i+'">Delete</button><button class="tiny" data-edit="'+i+'">Edit</button></div></article>').join('');$$('[data-del]').forEach(b=>b.onclick=()=>{alerts.splice(+b.dataset.del,1);save();renderAlerts();toast('Alert removed','Your watch was removed.')});$$('[data-edit]').forEach(b=>b.onclick=()=>{const a=alerts[+b.dataset.edit];openAlert(a.movie,a.city)})}
 function renderTheatres(){const city=prefs.city;const list=THEATRES[city]||THEATRES.Hyderabad;$('#cityPill').textContent='⌖ '+city;$('#theatreGrid').innerHTML=list.slice(0,12).map((t,i)=>'<article class="theatre"><div class="theatreTop"><div class="theatreName">'+esc(t)+'</div><div class="km">'+(1.8+(i*1.9)%14).toFixed(1)+' km</div></div><div class="theatreMeta">'+(i%2?'Premium screens · multiple formats':'Cinema · showtime-ready')+'</div><div class="theatreBottom"><span class="count">'+((i%4)+2)+' screens</span><button class="selectTheatre" data-theatre="'+esc(t)+'">Add to alert</button></div></article>').join('');$$('[data-theatre]').forEach(b=>b.onclick=()=>openAlert('',city))}
 $('#create').onclick=()=>openAlert();$('#create2').onclick=()=>openAlert();$('#close').onclick=closeAlert;$('#modal').onclick=e=>{if(e.target.id==='modal')closeAlert()};$('#modalCity').onchange=theatreChoices;
-$('#form').onsubmit=e=>{e.preventDefault();const theatres=$$('.choice.on').map(x=>x.dataset.t),sources=$$('.source:checked').map(x=>x.value),email=$('#email').value.trim();if(!email)return toast('Email required','Enter an email for alerts.');const a={movie:$('#movieInput').value.trim(),city:$('#modalCity').value,theatres,language:$('#modalLang').value,format:$('#modalFormat').value,time:$('#modalTime').value,date:$('#modalDate').value,sources,status:'ARMED'};prefs.email=email;alerts=[a,...alerts];save();closeAlert();renderAll();toast('Alert armed',a.movie+' saved in this browser.')}
+const API_BASE='https://cineping-alert-api.sumanthbabu12345.workers.dev';
+async function apiCreateAlert(payload){
+  const r=await fetch(API_BASE+'/api/alerts',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify(payload)});
+  let data={}; try{data=await r.json()}catch{}
+  if(!r.ok) throw new Error(data.error||'Alert service is unavailable');
+  return data;
+}
+$('#form').onsubmit=async e=>{
+  e.preventDefault();
+  const theatres=$('.choice.on').map(x=>x.dataset.t);
+  const sources=$('.source:checked').map(x=>x.value);
+  const email=$('#email').value.trim();
+  const movie=$('#movieInput').value.trim();
+  if(!email)return toast('Email required','Enter an email for alerts.');
+  if(!movie)return toast('Movie required','Enter the movie you want to watch.');
+  const a={movie,city:$('#modalCity').value,theatres,language:$('#modalLang').value,format:$('#modalFormat').value,time:$('#modalTime').value,date:$('#modalDate').value,sources,status:'ARMED'};
+  const submit=e.submitter; if(submit) submit.disabled=true;
+  toast('Saving alert','Connecting to CinePing…');
+  try{
+    await apiCreateAlert({...a,email});
+    prefs.email=email;
+    alerts=[a,...alerts];
+    save();
+    closeAlert();
+    renderAll();
+    toast('Alert armed',movie+' is now registered with CinePing.');
+  }catch(err){
+    toast('Could not arm alert',err.message||'Please try again.');
+  }finally{if(submit) submit.disabled=false;}
+}
 $('#q').oninput=()=>{renderMovies();renderAlerts()};['#city','#language','#format'].forEach(id=>$(id).onchange=()=>{renderMovies();renderAlerts()});$('#reset').onclick=()=>{$('#q').value='';$('#city').value='';$('#language').value='';$('#format').value='';renderMovies();renderAlerts()};$$('#movieTabs button').forEach(b=>b.onclick=()=>{$$('#movieTabs button').forEach(x=>x.classList.remove('active'));b.classList.add('active');renderMovies()});$('#theme').onclick=()=>{document.body.classList.toggle('light');prefs.theme=document.body.classList.contains('light')?'light':'dark';save()};$('#allTheatres').onclick=()=>{document.querySelector('#cinemas').scrollIntoView({behavior:'smooth'})};
 function renderAll(){cities();renderMovies();renderAlerts();renderTheatres()}
 renderAll();
