@@ -1,10 +1,11 @@
 name = "cineping-alert-api"
 main = "src/index.js"
-compatibility_date = "2026-09-01"
+compatibility_date = "2026-09-25"
 
 [vars]
 APP_URL = "https://sumanth2264.github.io/Sumanth"
 BREVO_FROM_NAME = "CinePing"
+CINEPING_RELEASE = "district-v6"
 
 [[d1_databases]]
 binding = "DB"
