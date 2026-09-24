@@ -222,6 +222,19 @@ footer{border-top:1px solid var(--line);padding:23px 0 34px;color:var(--subtle);
   </section>
 </div>
 <div class="toast" id="toast"><strong id="toastTitle">Saved</strong><span id="toastText">Your alert was saved.</span></div>
+<div class="modalBg" id="successModal" hidden>
+  <section class="modal" role="dialog" aria-modal="true" aria-labelledby="successTitle">
+    <div style="display:grid;place-items:center;gap:12px;text-align:center;padding:20px 10px 14px">
+      <div style="width:58px;height:58px;border-radius:50%;display:grid;place-items:center;background:rgba(184,242,139,.12);color:var(--mint);font-size:28px;border:1px solid rgba(184,242,139,.24)">✓</div>
+      <div>
+        <div class="kicker">WATCH CREATED</div>
+        <h2 class="modalTitle" id="successTitle" style="margin-top:7px">Alert created successfully</h2>
+        <p id="successText" style="margin:8px auto 0;max-width:560px;color:var(--muted);font-size:10px;line-height:1.7"></p>
+      </div>
+      <button class="btn primary" id="successDone">Done</button>
+    </div>
+  </section>
+</div>
 
 <script>
 const CITIES=['Hyderabad','Guntur','Vijayawada','Visakhapatnam','Bengaluru','Chennai','Mumbai','Delhi NCR','Pune','Kolkata','Kochi','Ahmedabad','Jaipur','Lucknow','Indore','Nagpur','Nellore','Tirupati','Kurnool','Kakinada','Coimbatore','Mysuru','Surat','Chandigarh','Patna','Bhopal','Guwahati','Agra','Vadodara','Kanpur','Noida','Gurugram','Faridabad','Ghaziabad','Bhubaneswar','Ranchi','Raipur','Varanasi','Amritsar','Ludhiana','Panaji','Nashik','Rajkot','Udaipur','Dehradun','Mangalore','Madurai','Salem','Thrissur','Thiruvananthapuram','Warangal','Rajahmundry','Anantapur','Kadapa'];
@@ -255,23 +268,38 @@ function renderAlerts(){const list=alerts;$('#alertCount').textContent=list.leng
 function renderTheatres(){const city=prefs.city;const list=THEATRES[city]||THEATRES.Hyderabad;$('#cityPill').textContent='⌖ '+city;$('#theatreGrid').innerHTML=list.slice(0,12).map((t,i)=>'<article class="theatre"><div class="theatreTop"><div class="theatreName">'+esc(t)+'</div><div class="km">'+(1.8+(i*1.9)%14).toFixed(1)+' km</div></div><div class="theatreMeta">'+(i%2?'Premium screens · multiple formats':'Cinema · showtime-ready')+'</div><div class="theatreBottom"><span class="count">'+((i%4)+2)+' screens</span><button class="selectTheatre" data-theatre="'+esc(t)+'">Add to alert</button></div></article>').join('');$$('[data-theatre]').forEach(b=>b.onclick=()=>openAlert('',city))}
 $('#create').onclick=()=>openAlert();$('#create2').onclick=()=>openAlert();$('#close').onclick=closeAlert;$('#modal').onclick=e=>{if(e.target.id==='modal')closeAlert()};$('#modalCity').onchange=theatreChoices;
 const API_BASE='https://cineping-alert-api.sumanthbabu12345.workers.dev';
+let alertSubmitting=false;
 async function apiCreateAlert(payload){
   const r=await fetch(API_BASE+'/api/alerts',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify(payload)});
   let data={}; try{data=await r.json()}catch{}
   if(!r.ok) throw new Error(data.error||'Alert service is unavailable');
   return data;
 }
+function openSuccess(message){
+  $('#successText').textContent=message;
+  $('#successModal').hidden=false;
+  document.body.style.overflow='hidden';
+}
+function closeSuccess(){
+  $('#successModal').hidden=true;
+  document.body.style.overflow='';
+}
+$('#successDone').onclick=closeSuccess;
+$('#successModal').onclick=e=>{if(e.target.id==='successModal')closeSuccess()};
 $('#form').onsubmit=async e=>{
   e.preventDefault();
-  const theatres=$('.choice.on').map(x=>x.dataset.t);
-  const sources=$('.source:checked').map(x=>x.value);
+  if(alertSubmitting) return;
+  const theatres=$$('.choice.on').map(x=>x.dataset.t);
+  const sources=$$('.source:checked').map(x=>x.value);
   const email=$('#email').value.trim();
   const movie=$('#movieInput').value.trim();
   if(!email)return toast('Email required','Enter an email for alerts.');
   if(!movie)return toast('Movie required','Enter the movie you want to watch.');
   const a={movie,city:$('#modalCity').value,theatres,language:$('#modalLang').value,format:$('#modalFormat').value,time:$('#modalTime').value,date:$('#modalDate').value,sources,status:'ARMED'};
-  const submit=e.submitter; if(submit) submit.disabled=true;
-  toast('Saving alert','Connecting to CinePing…');
+  const submit=e.submitter;
+  alertSubmitting=true;
+  if(submit){submit.disabled=true;submit.textContent='Creating…';}
+  toast('Creating alert','Saving your watch securely…');
   try{
     const result=await apiCreateAlert({...a,email});
     prefs.email=email;
@@ -279,10 +307,15 @@ $('#form').onsubmit=async e=>{
     save();
     closeAlert();
     renderAll();
-    toast(result.emailSent ? 'Alert armed' : 'Alert saved', result.emailSent ? movie+' is registered and the confirmation email was sent.' : movie+' is registered, but the confirmation email needs attention.');
+    openSuccess(result.emailSent
+      ? movie+' is now registered. A confirmation email has also been sent through Brevo.'
+      : movie+' is now registered in CinePing. The alert is active, but the confirmation email could not be sent.');
   }catch(err){
-    toast('Could not arm alert',err.message||'Please try again.');
-  }finally{if(submit) submit.disabled=false;}
+    toast('Could not create alert',err.message||'Please try again.');
+  }finally{
+    alertSubmitting=false;
+    if(submit){submit.disabled=false;submit.textContent='Arm alert →';}
+  }
 }
 $('#q').oninput=()=>{renderMovies();renderAlerts()};['#city','#language','#format'].forEach(id=>$(id).onchange=()=>{renderMovies();renderAlerts()});$('#reset').onclick=()=>{$('#q').value='';$('#city').value='';$('#language').value='';$('#format').value='';renderMovies();renderAlerts()};$$('#movieTabs button').forEach(b=>b.onclick=()=>{$$('#movieTabs button').forEach(x=>x.classList.remove('active'));b.classList.add('active');renderMovies()});$('#theme').onclick=()=>{document.body.classList.toggle('light');prefs.theme=document.body.classList.contains('light')?'light':'dark';save()};$('#allTheatres').onclick=()=>{document.querySelector('#cinemas').scrollIntoView({behavior:'smooth'})};
 function renderAll(){cities();renderMovies();renderAlerts();renderTheatres()}
