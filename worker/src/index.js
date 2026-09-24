@@ -150,6 +150,122 @@ async function processShows(env, shows) {
   return { sent, checked };
 }
 
+const DISTRICT_MOVIES_URL = "https://api.parse.bot/scraper/9dbc34b2-b7c3-4e9b-9540-6d2bb2568c57/get_movies_in_theaters";
+const DISTRICT_SHOWTIMES_URL = "https://api.parse.bot/scraper/9dbc34b2-b7c3-4e9b-9540-6d2bb2568c57/get_movie_showtimes";
+
+function normalizeTitle(s) {
+  return String(s || "")
+    .toLowerCase()
+    .replace(/&/g, "and")
+    .replace(/[^a-z0-9]+/g, " ")
+    .trim();
+}
+
+function districtHeaders(env) {
+  return {
+    "accept": "application/json",
+    "x-api-key": env.PARSE_API_KEY
+  };
+}
+
+async function districtGet(url, params, env) {
+  const qs = new URLSearchParams(params);
+  const r = await fetch(url + "?" + qs.toString(), {
+    method: "GET",
+    headers: districtHeaders(env),
+    cf: { cacheTtl: 0, cacheEverything: false }
+  });
+  const textBody = await r.text();
+  let data = {};
+  try { data = JSON.parse(textBody); } catch {}
+  if (!r.ok) throw new Error("District feed returned " + r.status);
+  return data;
+}
+
+async function fetchDistrictShows(env) {
+  if (!env.PARSE_API_KEY || !env.DB) return { configured: false, shows: [] };
+
+  const all = await env.DB.prepare("SELECT * FROM alerts WHERE status='active'").all();
+  const alerts = all.results || [];
+  if (!alerts.length) return { configured: true, shows: [] };
+
+  const groups = new Map();
+  for (const alert of alerts) {
+    const city = String(alert.city || "").trim();
+    const movie = String(alert.movie || "").trim();
+    if (!city || !movie) continue;
+    const key = city.toLowerCase() + "|" + normalizeTitle(movie);
+    if (!groups.has(key)) groups.set(key, { city, movie });
+  }
+
+  const shows = [];
+
+  for (const group of groups.values()) {
+    const moviesData = await districtGet(DISTRICT_MOVIES_URL, { city: group.city }, env);
+    const movies = Array.isArray(moviesData.movies)
+      ? moviesData.movies
+      : Array.isArray(moviesData?.data?.movies) ? moviesData.data.movies : [];
+
+    const wanted = normalizeTitle(group.movie);
+    const movie = movies.find(m =>
+      normalizeTitle(m.title || m.name) === wanted
+    ) || movies.find(m =>
+      normalizeTitle(m.title || m.name).includes(wanted) ||
+      wanted.includes(normalizeTitle(m.title || m.name))
+    );
+
+    if (!movie) continue;
+
+    const movieId = movie.movie_id || movie.id;
+    if (!movieId) continue;
+
+    const detail = await districtGet(
+      DISTRICT_SHOWTIMES_URL,
+      { movie_id: String(movieId), city: group.city },
+      env
+    );
+
+    const theatres = Array.isArray(detail.theatres)
+      ? detail.theatres
+      : Array.isArray(detail?.data?.theatres) ? detail.data.theatres : [];
+
+    const showDates = Array.isArray(detail.show_dates)
+      ? detail.show_dates
+      : Array.isArray(detail?.data?.show_dates) ? detail.data.show_dates : [];
+
+    for (const theatre of theatres) {
+      const theatreName = theatre.name || theatre.theatre_name || "";
+      const slots = Array.isArray(theatre.showtimes)
+        ? theatre.showtimes
+        : Array.isArray(theatre.shows) ? theatre.shows : [];
+
+      for (const slot of slots) {
+        const date = slot.date || detail.date || showDates[0] || "";
+        const time = slot.time || slot.show_time || slot.start_time || "";
+        const formats = [slot.screen_format, slot.format, slot.auditorium_format].filter(Boolean).map(String);
+        const languages = [slot.language, slot.lang].filter(Boolean).map(String);
+        const bookingUrl = slot.booking_url || slot.bookingUrl || slot.book_now_url || theatre.booking_url || "";
+
+        shows.push({
+          movie: movie.title || group.movie,
+          city: group.city,
+          theatre: theatreName,
+          date,
+          time,
+          formats,
+          languages,
+          source: "District",
+          bookingUrl,
+          isFdfs: Boolean(slot.is_fdfs || slot.isFdfs),
+          isReleaseDay: Boolean(slot.is_release_day || slot.isReleaseDay)
+        });
+      }
+    }
+  }
+
+  return { configured: true, shows };
+}
+
 async function fetchConfiguredFeed(env) {
   if (!env.SHOWTIME_FEED_URL) return { configured: false, shows: [] };
   const headers = {};
@@ -182,7 +298,7 @@ export default {
     const u = new URL(req.url);
 
     if (u.pathname === "/api/health" && req.method === "GET") {
-      return json(env, { ok: true, service: "cineping-alert-api", version: "2026-09-26-monitor-v1", d1: !!env.DB, mailConfigured: !!(env.BREVO_API_KEY && env.BREVO_FROM_EMAIL), schedulerConfigured: !!env.SHOWTIME_FEED_URL });
+      return json(env, { ok: true, service: "cineping-alert-api", version: "2026-09-26-district-v1", d1: !!env.DB, mailConfigured: !!(env.BREVO_API_KEY && env.BREVO_FROM_EMAIL), districtConfigured: !!env.PARSE_API_KEY, schedulerConfigured: !!(env.PARSE_API_KEY || env.SHOWTIME_FEED_URL) });
     }
 
     if (u.pathname === "/api/alerts" && req.method === "POST") {
@@ -254,9 +370,13 @@ export default {
   async scheduled(event, env, ctx) {
     ctx.waitUntil((async () => {
       try {
+        const district = await fetchDistrictShows(env);
+        if (district.configured) {
+          await processShows(env, district.shows);
+          return;
+        }
         const feed = await fetchConfiguredFeed(env);
-        if (!feed.configured) return;
-        await processShows(env, feed.shows);
+        if (feed.configured) await processShows(env, feed.shows);
       } catch {
         // Retry automatically on the next scheduled run.
       }
