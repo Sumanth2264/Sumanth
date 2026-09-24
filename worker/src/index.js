@@ -1,5 +1,5 @@
 const ALLOWED_ORIGIN = "https://sumanth2264.github.io";
-const BUILD_STAMP = "2026-09-26-district-monitor-v8a";
+const BUILD_STAMP = "2026-09-26-showting-parity-v1";
 const jsonHeaders = (env, origin = ALLOWED_ORIGIN) => ({
   "content-type": "application/json; charset=utf-8",
   "Access-Control-Allow-Origin": origin === ALLOWED_ORIGIN ? ALLOWED_ORIGIN : ALLOWED_ORIGIN,
@@ -210,6 +210,7 @@ async function ensureMonitorTables(env) {
   ).run();
   try { await env.DB.prepare("ALTER TABLE alerts ADD COLUMN provider TEXT DEFAULT 'District'").run(); } catch {}
   try { await env.DB.prepare("ALTER TABLE alerts ADD COLUMN provider_movie_id TEXT DEFAULT ''").run(); } catch {}
+  try { await env.DB.prepare("ALTER TABLE alerts ADD COLUMN provider_movies TEXT DEFAULT '{}'").run(); } catch {}
 
   await env.DB.prepare(
     "CREATE TABLE IF NOT EXISTS district_movie_cache (cache_key TEXT PRIMARY KEY, payload TEXT NOT NULL, fetched_at TEXT NOT NULL)"
@@ -645,14 +646,34 @@ function normalizeBmsShows(detail, movie, city, fallbackDate) {
   return result;
 }
 
-function alertTargetKey(alert) {
+function providerMovieMap(alert) {
+  const out = {};
+  try {
+    const parsed = JSON.parse(alert?.provider_movies || "{}");
+    if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+      for (const [provider, movieId] of Object.entries(parsed)) {
+        if (movieId) out[providerName(provider)] = String(movieId);
+      }
+    }
+  } catch {}
+  if (alert?.provider_movie_id) {
+    out[providerName(alert.provider || "District")] = String(alert.provider_movie_id);
+  }
+  return out;
+}
+
+function providerMovieIdForAlert(alert, provider) {
+  return providerMovieMap(alert)[providerName(provider)] || "";
+}
+
+function alertTargetKey(alert, providerOverride = null) {
   const datePart =
     alert.date_pref === "Specific date" && alert.specific_date
       ? alert.specific_date
       : String(alert.date_pref || "Any date");
 
   return [
-    providerName(alert.provider || "District"),
+    providerName(providerOverride || alert.provider || "District"),
     String(alert.city || "").toLowerCase(),
     normalizeTitle(alert.movie),
     datePart.toLowerCase()
@@ -669,18 +690,18 @@ function dateDistanceDays(dateString) {
   return Math.round((d - today) / 86400000);
 }
 
-async function upsertTarget(env, alert, burst = true) {
+async function upsertTarget(env, alert, burst = true, providerOverride = null, providerMovieIdOverride = null) {
   await ensureMonitorTables(env);
-  const key = alertTargetKey(alert);
+  const provider = providerName(providerOverride || alert.provider || "District");
+  const providerMovieId = String(providerMovieIdOverride || providerMovieIdForAlert(alert, provider) || "");
+  const key = alertTargetKey(alert, provider);
   const current = await env.DB.prepare("SELECT * FROM monitor_targets WHERE target_key=?").bind(key).first();
   const now = isoNoZ(new Date());
-  const provider = providerName(alert.provider || "District");
-  const providerMovieId = String(alert.provider_movie_id || "");
   const burstRemaining = Math.max(Number(current?.burst_remaining || 0), burst ? CREATION_BURST_CALLS : 0);
 
   if (!current) {
     await env.DB.prepare(
-      "INSERT INTO monitor_targets(target_key,city,movie,date_pref,specific_date,provider,provider_movie_id,movie_id,active,next_poll_at,burst_remaining,usage_month,showtime_calls_month) VALUES(?,?,?,?,?,?,?, ?,1,?,?,?,0)"
+      "INSERT INTO monitor_targets(target_key,city,movie,date_pref,specific_date,provider,provider_movie_id,movie_id,active,next_poll_at,burst_remaining,usage_month,showtime_calls_month) VALUES(?,?,?,?,?,?,?,?,1,?,?,?,0)"
     ).bind(
       key, alert.city || "", alert.movie || "", alert.date_pref || "Any date",
       alert.specific_date || "", provider, providerMovieId,
@@ -705,7 +726,10 @@ async function loadAlertsForTarget(env, target) {
     "SELECT * FROM alerts WHERE status='active' AND LOWER(city)=LOWER(?)"
   ).bind(target.city).all();
 
-  return (all.results || []).filter((a) => alertTargetKey(a) === target.target_key);
+  return (all.results || []).filter((a) => {
+    const sameKey = alertTargetKey(a, target.provider) === target.target_key;
+    return sameKey && Boolean(providerMovieIdForAlert(a, target.provider));
+  });
 }
 
 async function pollTarget(env, targetKey, immediate = false) {
@@ -725,7 +749,7 @@ async function pollTarget(env, targetKey, immediate = false) {
   const targetAlert = alerts[0];
   const usageMonth = monthKey();
   const provider = providerName(target.provider || targetAlert.provider || "District");
-  const providerMovieId = String(target.provider_movie_id || targetAlert.provider_movie_id || "");
+  const providerMovieId = String(target.provider_movie_id || providerMovieIdForAlert(targetAlert, provider) || "");
 
   let movieId = providerMovieId;
   let movie = { title: target.movie, name: target.movie };
@@ -884,7 +908,7 @@ export default {
       return json(env, {
         ok: true,
         service: "cineping-alert-api",
-        version: "2026-09-26-live-catalog-monitor-v3",
+        version: "2026-09-26-showting-parity-v1",
         d1: !!env.DB,
         mailConfigured: !!(env.BREVO_API_KEY && env.BREVO_FROM_EMAIL),
         districtConfigured: !!env.PARSE_API_KEY,
@@ -973,8 +997,19 @@ export default {
         const datePref = String(b.date || "Any date");
         const specificDate = String(b.specificDate || "");
 
+        const provider = providerName(b.provider);
+        const providerMovies = (b.providerMovies && typeof b.providerMovies === "object" && !Array.isArray(b.providerMovies))
+          ? Object.fromEntries(Object.entries(b.providerMovies)
+              .filter(([k,v]) => v)
+              .map(([k,v]) => [providerName(k), String(v)]))
+          : {};
+        if (b.providerMovieId) providerMovies[provider] = String(b.providerMovieId);
+        if (!Object.keys(providerMovies).length) {
+          return json(env, { error: "at least one provider movie id is required" }, 400);
+        }
+
         await env.DB.prepare(
-          "INSERT INTO alerts(id,email,movie,city,theatres,language,format,time_pref,date_pref,specific_date,source,status,manage_token,provider,provider_movie_id,created_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,datetime('now'))"
+          "INSERT INTO alerts(id,email,movie,city,theatres,language,format,time_pref,date_pref,specific_date,source,status,manage_token,provider,provider_movie_id,provider_movies,created_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,datetime('now'))"
         ).bind(
           id,
           email,
@@ -986,15 +1021,20 @@ export default {
           String(b.time || "Any time"),
           datePref,
           specificDate,
-          JSON.stringify(Array.isArray(b.sources) && b.sources.length ? b.sources : ["Any"]),
+          JSON.stringify(Array.isArray(b.sources) && b.sources.length ? b.sources : [provider]),
           "active",
           token,
-          providerName(b.provider),
-          String(b.providerMovieId || "")
+          provider,
+          String(providerMovies[provider] || ""),
+          JSON.stringify(providerMovies)
         ).run();
 
         const alertRow = await env.DB.prepare("SELECT * FROM alerts WHERE id=?").bind(id).first();
-        const targetKey = await upsertTarget(env, alertRow, true);
+        const targetEntries = Object.entries(providerMovies);
+        const targetKeys = [];
+        for (const [targetProvider, movieId] of targetEntries) {
+          targetKeys.push(await upsertTarget(env, alertRow, true, targetProvider, movieId));
+        }
 
         let emailSent = false;
         try {
@@ -1005,22 +1045,25 @@ export default {
             "<p>Your CinePing alert for <strong>" + esc(movie) + "</strong> in <strong>" +
             esc(city || "India") + "</strong> is active.</p>" +
             "<p>Selected theatres: " + esc((b.theatres || []).join(", ") || "Any matching theatre") + ".</p>" +
-            "<p>CinePing will check your selected booking source for matching showtimes and email you when a bookable match appears.</p>"
+            "<p>Booking sources: " + esc(targetEntries.map(([p]) => p).join(", ")) + ".</p>" +
+            "<p>CinePing will check the selected booking sources for matching showtimes and email you when a bookable match appears.</p>"
           );
           emailSent = true;
         } catch {}
 
-        let firstCheck = null;
-        try {
-          firstCheck = await pollTarget(env, targetKey, true);
-        } catch (e) {
-          firstCheck = { checked: 0, sent: 0, queued: true };
-          await env.DB.prepare(
-            "UPDATE monitor_targets SET next_poll_at=? WHERE target_key=?"
-          ).bind(isoNoZ(new Date(Date.now() + 5 * 60000)), targetKey).run();
+        const firstChecks = [];
+        for (const key of targetKeys) {
+          try {
+            firstChecks.push(await pollTarget(env, key, true));
+          } catch {
+            firstChecks.push({ checked: 0, sent: 0, queued: true });
+            await env.DB.prepare(
+              "UPDATE monitor_targets SET next_poll_at=? WHERE target_key=?"
+            ).bind(isoNoZ(new Date(Date.now() + 5 * 60000)), key).run();
+          }
         }
 
-        return json(env, { ok: true, id, emailSent, monitorStarted: true, firstCheck }, 201);
+        return json(env, { ok: true, id, emailSent, monitorStarted: true, targetsCreated: targetEntries.length, firstChecks }, 201);
       } catch {
         return json(env, { error: "could not create alert" }, 500);
       }
