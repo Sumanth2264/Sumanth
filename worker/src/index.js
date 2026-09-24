@@ -88,11 +88,11 @@ function matchTimePreference(alert, show) {
 }
 
 function match(alert, show) {
-  if (alert.city && alert.city.toLowerCase() !== String(show.city || "").toLowerCase()) return false;
+  if (alert.city && normalizeTitle(alert.city) !== normalizeTitle(show.city)) return false;
   if (alert.movie && normalizeTitle(alert.movie) !== normalizeTitle(show.movie)) return false;
 
   const theatres = parseJsonArray(alert.theatres);
-  if (theatres.length && !theatres.some((x) => String(x).toLowerCase() === String(show.theatre || "").toLowerCase())) return false;
+  if (theatres.length && !theatres.some((x) => { const a=normalizeTitle(x), b=normalizeTitle(show.theatre); return a===b || a.includes(b) || b.includes(a); })) return false;
 
   if (alert.language && alert.language !== "Any" &&
       !(show.languages || []).some((x) => String(x).toLowerCase() === String(alert.language).toLowerCase())) return false;
@@ -547,7 +547,7 @@ async function pollTarget(env, targetKey, immediate = false) {
     return { checked: 0, sent: 0, skipped: true, reason: "target-month-cap" };
   }
 
-  const movieData = await fetchDistrictMoviesCached(env, target.city, immediate);
+  const movieData = await fetchDistrictMoviesCached(env, target.city, false);
   const movie = findMovie(movieData, target.movie);
 
   if (!movie) {
@@ -677,7 +677,7 @@ export default {
       return json(env, {
         ok: true,
         service: "cineping-alert-api",
-        version: "2026-09-26-district-monitor-v3",
+        version: "2026-09-26-district-monitor-v4",
         d1: !!env.DB,
         mailConfigured: !!(env.BREVO_API_KEY && env.BREVO_FROM_EMAIL),
         districtConfigured: !!env.PARSE_API_KEY,
@@ -743,7 +743,17 @@ export default {
           emailSent = true;
         } catch {}
 
-        return json(env, { ok: true, id, emailSent, monitorStarted: true, firstCheckQueued: true }, 201);
+        let firstCheck = null;
+        try {
+          firstCheck = await pollTarget(env, targetKey, true);
+        } catch (e) {
+          firstCheck = { checked: 0, sent: 0, queued: true };
+          await env.DB.prepare(
+            "UPDATE monitor_targets SET next_poll_at=? WHERE target_key=?"
+          ).bind(isoNoZ(new Date(Date.now() + 5 * 60000)), targetKey).run();
+        }
+
+        return json(env, { ok: true, id, emailSent, monitorStarted: true, firstCheck }, 201);
       } catch {
         return json(env, { error: "could not create alert" }, 500);
       }
