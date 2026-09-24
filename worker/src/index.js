@@ -1,4 +1,5 @@
 const ALLOWED_ORIGIN = "https://sumanth2264.github.io";
+const BUILD_STAMP = "2026-09-26-district-monitor-v8a";
 const jsonHeaders = (env, origin = ALLOWED_ORIGIN) => ({
   "content-type": "application/json; charset=utf-8",
   "Access-Control-Allow-Origin": origin === ALLOWED_ORIGIN ? ALLOWED_ORIGIN : ALLOWED_ORIGIN,
