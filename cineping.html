@@ -1,0 +1,327 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="theme-color" content="#0b0d14">
+<meta name="description" content="CinePing — personalised movie booking alerts. Watch a movie across your city and get an email when matching shows become available.">
+<title>CinePing — Never Miss the Drop</title>
+<style>
+:root{
+  --bg:#090b10;--surface:#10131b;--surface2:#151923;--surface3:#1a1f2b;
+  --text:#f6f7fb;--muted:#a1a8b8;--subtle:#71798b;--line:#252b37;
+  --brand:#ff4f74;--brand2:#ff7e9a;--mint:#b8f28b;--gold:#f2d37d;
+  --radius:18px;--shadow:0 24px 90px rgba(0,0,0,.42)
+}
+*{box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{margin:0;background:
+radial-gradient(900px 500px at 76% -8%,rgba(255,79,116,.12),transparent 58%),
+radial-gradient(800px 500px at -5% 22%,rgba(78,177,255,.08),transparent 60%),
+var(--bg);color:var(--text);font-family:Inter,ui-sans-serif,system-ui,-apple-system,Segoe UI,sans-serif}
+body.light{--bg:#f5f6fa;--surface:#fff;--surface2:#f2f3f6;--surface3:#ebeef3;--text:#10131a;--muted:#5c6472;--subtle:#7b8390;--line:#dfe3ea}
+a{color:inherit}
+button,input,select{font:inherit}
+button{cursor:pointer}
+.wrap{width:min(1260px,calc(100% - 32px));margin:auto}
+.topbar{position:sticky;top:0;z-index:50;border-bottom:1px solid var(--line);background:rgba(9,11,16,.78);backdrop-filter:blur(18px)}
+body.light .topbar{background:rgba(245,246,250,.82)}
+.topin{height:72px;display:flex;align-items:center;justify-content:space-between;gap:18px}
+.brand{display:flex;align-items:center;gap:11px;font-weight:950;text-decoration:none;letter-spacing:-.06em;font-size:21px}
+.logo{width:14px;height:14px;border-radius:50%;background:linear-gradient(135deg,var(--brand),#ffc3cf);box-shadow:0 0 0 6px rgba(255,79,116,.08),0 0 30px rgba(255,79,116,.35)}
+.brand em{font-style:normal;color:var(--brand)}
+.nav{display:flex;align-items:center;gap:4px}
+.nav a{font-size:11px;color:var(--muted);text-decoration:none;padding:10px 12px;border-radius:10px}
+.nav a:hover,.nav a.active{color:var(--text);background:var(--surface2)}
+.topright{display:flex;gap:8px;align-items:center}
+.citypill,.themebtn{border:1px solid var(--line);background:var(--surface);color:var(--muted);border-radius:999px}
+.citypill{padding:8px 11px;font-size:9px}
+.themebtn{width:36px;height:36px}
+.hero{padding:70px 0 36px}
+.heroGrid{display:grid;grid-template-columns:1.35fr .65fr;gap:28px;align-items:stretch}
+.kicker{font-size:9px;letter-spacing:.18em;font-weight:900;color:var(--subtle)}
+h1{margin:13px 0 20px;font-size:clamp(54px,7.7vw,94px);line-height:.92;letter-spacing:-.085em;max-width:950px}
+h1 .outline{color:transparent;-webkit-text-stroke:1.2px rgba(255,255,255,.35)}
+body.light h1 .outline{-webkit-text-stroke:1.2px rgba(16,19,26,.33)}
+.heroCopy{font-size:16px;line-height:1.72;color:var(--muted);max-width:740px;margin:0 0 24px}
+.ctaRow{display:flex;gap:9px;flex-wrap:wrap}
+.btn{border:1px solid var(--line);border-radius:12px;padding:12px 15px;font-size:11px;font-weight:850}
+.btn.primary{background:linear-gradient(135deg,var(--brand),var(--brand2));border-color:transparent;color:#fff;box-shadow:0 14px 34px rgba(255,79,116,.2)}
+.btn.secondary{background:var(--surface);color:var(--text)}
+.btn.ghost{background:transparent;color:var(--muted)}
+.trust{display:flex;gap:14px;flex-wrap:wrap;margin-top:18px;color:var(--subtle);font-size:9px}
+.radar{border:1px solid var(--line);border-radius:24px;background:linear-gradient(150deg,rgba(255,255,255,.05),rgba(255,255,255,.01));box-shadow:var(--shadow);padding:20px;overflow:hidden}
+body.light .radar{background:#fff}
+.radarTop{display:flex;align-items:center;justify-content:space-between;font-size:9px;font-weight:900;letter-spacing:.13em;color:var(--subtle)}
+.live{color:var(--mint)}
+.radarVisual{height:285px;position:relative;display:grid;place-items:center}
+.ring{position:absolute;border:1px solid rgba(255,255,255,.09);border-radius:50%;animation:spin 18s linear infinite}
+.r1{width:250px;height:250px}.r2{width:186px;height:186px;border-color:rgba(255,79,116,.18);animation-direction:reverse}.r3{width:120px;height:120px;border-color:rgba(184,242,139,.18)}
+@keyframes spin{to{transform:rotate(360deg)}}
+.puck{width:96px;height:96px;border-radius:50%;display:grid;place-items:center;align-content:center;background:radial-gradient(circle at 34% 28%,#fff,rgba(255,255,255,.07) 18%,#171d2a 66%);border:1px solid rgba(255,255,255,.13);box-shadow:0 0 65px rgba(78,177,255,.15)}
+.puck strong{font-size:24px;letter-spacing:-.07em}.puck small{font-size:7px;letter-spacing:.22em;color:var(--subtle)}
+.marker{position:absolute;width:30px;height:30px;border-radius:9px;display:grid;place-items:center;font-size:9px;font-weight:1000;border:1px solid var(--line);box-shadow:0 8px 24px rgba(0,0,0,.2)}
+.m1{left:25px;top:60px;background:var(--gold);color:#1c1607}.m2{right:22px;top:120px;background:#f1f3f7;color:#161a22}.m3{left:65px;bottom:42px;background:var(--surface3);color:#94ddff}
+.radarStats{display:grid;grid-template-columns:repeat(3,1fr);border-top:1px solid var(--line);padding-top:13px;gap:12px}
+.radarStats strong{font-size:20px}.radarStats span{display:block;color:var(--subtle);font-size:8px;margin-top:2px}
+.controlbar{margin-top:20px;display:grid;grid-template-columns:1.6fr .72fr .72fr .72fr auto;gap:8px;padding:8px;border:1px solid var(--line);background:rgba(255,255,255,.025);border-radius:16px}
+.controlbar>*{min-height:44px}
+.search{display:flex;align-items:center;gap:9px;background:var(--surface);border:1px solid var(--line);border-radius:11px;padding:0 12px}
+.search input{background:transparent;border:0;outline:0;color:var(--text);width:100%;font-size:11px}
+.filter{background:var(--surface);border:1px solid var(--line);border-radius:11px;color:var(--text);padding:0 11px;outline:0;font-size:11px}
+.section{padding:38px 0 74px;scroll-margin-top:92px}
+.sectionHead{display:flex;align-items:flex-end;justify-content:space-between;gap:20px;margin-bottom:17px}
+.sectionHead h2{font-size:29px;letter-spacing:-.055em;margin:4px 0 0}
+.sectionHead p{margin:0;color:var(--muted);font-size:10px;max-width:490px;line-height:1.6}
+.sublinks{display:flex;gap:4px}
+.sublinks button{border:0;background:transparent;color:var(--subtle);padding:8px 10px;border-radius:9px;font-size:9px}.sublinks button.active{background:var(--surface2);color:var(--text)}
+.grid4{display:grid;grid-template-columns:repeat(4,1fr);gap:13px}
+.movie{border:1px solid var(--line);border-radius:18px;overflow:hidden;background:var(--surface);transition:transform .18s,border-color .18s}
+.movie:hover{transform:translateY(-2px);border-color:#343c4c}
+.art{height:230px;position:relative;padding:15px;display:flex;align-items:flex-end;overflow:hidden}
+.art:before{content:"";position:absolute;inset:0;background:radial-gradient(circle at 72% 26%,rgba(255,255,255,.35),transparent 22%),linear-gradient(180deg,transparent 25%,rgba(5,7,11,.9) 100%)}
+.art.a{background:linear-gradient(145deg,#163f49 0%,#3a9ea1 48%,#131821 100%)}
+.art.b{background:linear-gradient(145deg,#211640 0%,#6b4bc4 52%,#ef7598 100%)}
+.art.c{background:linear-gradient(145deg,#2d1d10 0%,#b9703c 52%,#ffd78e 100%)}
+.art.d{background:linear-gradient(145deg,#112131 0%,#416d83 50%,#d3c1a7 100%)}
+.artTitle{position:relative;z-index:1;font-weight:1000;font-size:23px;line-height:.9;letter-spacing:-.06em}
+.movieBody{padding:13px}
+.movieTitle{font-weight:900;font-size:13px}.movieMeta{font-size:8px;color:var(--muted);margin-top:5px}
+.chips{display:flex;flex-wrap:wrap;gap:5px;margin-top:9px}
+.chip{font-size:8px;color:var(--muted);background:var(--surface2);border:1px solid var(--line);border-radius:7px;padding:5px 7px}
+.movieFoot{display:flex;justify-content:space-between;align-items:center;gap:8px;margin-top:13px}.date{font-size:8px;color:var(--subtle)}
+.arm{border:1px solid rgba(255,79,116,.22);background:rgba(255,79,116,.09);color:#ff9eb3;border-radius:9px;padding:7px 9px;font-size:8px;font-weight:900}
+.panel{border:1px solid var(--line);border-radius:19px;background:var(--surface);padding:18px}
+.alertLayout{display:grid;grid-template-columns:1fr .75fr;gap:13px}
+.alertMain{display:grid;gap:11px}
+.alertCard{border:1px solid var(--line);border-radius:16px;padding:14px;background:linear-gradient(145deg,rgba(255,255,255,.03),transparent)}
+.alertHeader{display:flex;justify-content:space-between;gap:10px}.alertHeader strong{font-size:13px}.status{font-size:8px;border-radius:999px;padding:5px 7px;border:1px solid rgba(184,242,139,.2);color:var(--mint)}
+.alertLine{height:1px;background:var(--line);margin:11px 0}
+.alertActions{display:flex;gap:8px;justify-content:flex-end;margin-top:10px}.tiny{background:transparent;border:0;color:var(--subtle);font-size:8px}.tiny:hover{color:var(--brand)}
+.steps{display:grid;gap:9px}
+.step{display:grid;grid-template-columns:30px 1fr;gap:10px;padding:12px;border:1px solid var(--line);border-radius:14px;background:var(--surface2)}
+.num{width:30px;height:30px;border-radius:9px;background:rgba(255,79,116,.11);color:#ff9eb3;display:grid;place-items:center;font-weight:950;font-size:9px}
+.step strong{display:block;font-size:10px}.step span{display:block;font-size:8px;color:var(--muted);margin-top:2px}
+.theatreGrid{display:grid;grid-template-columns:repeat(4,1fr);gap:11px}
+.theatre{border:1px solid var(--line);background:var(--surface);border-radius:15px;padding:13px}
+.theatreTop{display:flex;justify-content:space-between;gap:10px}.theatreName{font-size:11px;font-weight:900}.km{font-size:8px;color:#8fdfff}
+.theatreMeta{font-size:8px;color:var(--muted);margin-top:5px}.theatreBottom{display:flex;justify-content:space-between;gap:8px;align-items:center;margin-top:10px}
+.count{font-size:8px;color:var(--subtle)}
+.selectTheatre{border:1px solid var(--line);background:var(--surface2);color:var(--text);border-radius:8px;padding:6px 8px;font-size:8px}
+.sync{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:14px 16px;border:1px dashed #38404f;border-radius:15px;background:rgba(255,255,255,.02);margin-bottom:12px}.sync strong{font-size:10px}.sync small{font-size:8px;color:var(--muted);display:block;margin-top:2px}.syncBadge{color:var(--gold);font-size:8px;font-weight:900}
+.infoGrid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px}.info{padding:15px;border:1px solid var(--line);border-radius:15px;background:var(--surface)}.info strong{font-size:10px}.info p{font-size:8px;color:var(--muted);line-height:1.65;margin:6px 0 0}
+footer{border-top:1px solid var(--line);padding:23px 0 34px;color:var(--subtle);font-size:8px;display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap}
+.modalBg{position:fixed;inset:0;z-index:80;background:rgba(0,0,0,.68);backdrop-filter:blur(11px);display:grid;place-items:center;padding:16px}.modalBg[hidden]{display:none!important}.modal{width:min(760px,100%);max-height:calc(100vh - 24px);overflow:auto;border:1px solid var(--line);border-radius:21px;background:var(--surface);box-shadow:var(--shadow);padding:19px}
+.modalHead{display:flex;justify-content:space-between;gap:10px}.modalTitle{font-size:25px;letter-spacing:-.05em;margin:3px 0 0}.close{width:34px;height:34px;border:1px solid var(--line);border-radius:10px;background:var(--surface2);color:var(--text)}
+.form{display:grid;gap:11px;margin-top:14px}.row{display:grid;grid-template-columns:1fr 1fr;gap:10px}.field{display:grid;gap:6px;color:var(--muted);font-size:8px}.field input,.field select{width:100%;height:43px;border:1px solid var(--line);border-radius:10px;background:var(--surface2);color:var(--text);padding:0 11px;outline:0;font-size:10px}.checkrow{display:flex;gap:7px;flex-wrap:wrap}.check{display:flex;align-items:center;gap:6px;border:1px solid var(--line);border-radius:9px;background:var(--surface2);padding:8px 10px;font-size:8px}.theatreChoices{display:grid;grid-template-columns:repeat(3,1fr);gap:7px;max-height:190px;overflow:auto;padding-right:2px}.choice{border:1px solid var(--line);background:var(--surface2);color:var(--muted);border-radius:9px;padding:8px;font-size:8px;text-align:left}.choice.on{border-color:rgba(255,79,116,.24);background:rgba(255,79,116,.09);color:var(--text)}.modalFoot{display:flex;justify-content:space-between;gap:10px;align-items:center;margin-top:2px}.modalFoot small{font-size:8px;color:var(--subtle);max-width:440px;line-height:1.5}
+.toast{position:fixed;right:15px;bottom:15px;z-index:100;opacity:0;pointer-events:none;transform:translateY(16px);transition:.2s;padding:12px 14px;border-radius:13px;border:1px solid var(--line);background:var(--surface);box-shadow:var(--shadow)}.toast.show{opacity:1;transform:none}.toast strong{font-size:10px;display:block}.toast span{font-size:8px;color:var(--muted)}
+@media(max-width:1050px){.heroGrid{grid-template-columns:1fr}.grid4{grid-template-columns:repeat(3,1fr)}.theatreGrid{grid-template-columns:repeat(3,1fr)}.controlbar{grid-template-columns:1.5fr 1fr 1fr 1fr auto}}
+@media(max-width:760px){.wrap{width:calc(100% - 20px)}.topin{height:62px}.nav{display:none}.hero{padding:48px 0 26px}.heroCopy{font-size:13px}.controlbar{grid-template-columns:1fr 1fr}.search{grid-column:1/-1}.section{padding:30px 0 55px}.sectionHead{align-items:flex-start;flex-direction:column}.grid4,.theatreGrid,.infoGrid,.alertLayout{grid-template-columns:1fr}.grid4{grid-template-columns:repeat(2,1fr)}.row{grid-template-columns:1fr}.theatreChoices{grid-template-columns:1fr 1fr}.modalFoot{flex-direction:column;align-items:stretch}.modalFoot .btn{width:100%}}
+@media(max-width:480px){.grid4{grid-template-columns:1fr}.art{height:250px}h1{font-size:48px}.ctaRow .btn{width:100%}.radarVisual{height:255px}}
+</style>
+</head>
+<body>
+<header class="topbar">
+  <div class="topin wrap">
+    <a class="brand" href="#home"><span class="logo"></span>Cine<em>Ping</em></a>
+    <nav class="nav">
+      <a class="active" href="#home">Home</a><a href="#movies">Movies</a><a href="#alerts">My Alerts <b id="alertCount">0</b></a><a href="#cinemas">Cinemas</a><a href="#how">How it works</a>
+    </nav>
+    <div class="topright"><span class="citypill" id="cityPill">⌖ Hyderabad</span><button class="themebtn" id="theme" aria-label="Toggle theme">◐</button></div>
+  </div>
+</header>
+
+<main id="home">
+<section class="hero wrap">
+  <div class="heroGrid">
+    <div>
+      <div class="kicker">PERSONAL MOVIE BOOKING RADAR · INDIA</div>
+      <h1>Never miss the<br><span class="outline">moment tickets drop.</span></h1>
+      <p class="heroCopy">Choose a movie, city, cinemas, screens, language, format and show window. CinePing turns that into one clean watch and is designed to email you when a matching booking becomes available.</p>
+      <div class="ctaRow"><button class="btn primary" id="create">Create a free alert</button><a class="btn secondary" href="#movies">Browse movies</a></div>
+      <div class="trust"><span>✓ Email-first</span><span>✓ No Google login required</span><span>✓ Official booking handoff</span></div>
+    </div>
+    <aside class="radar">
+      <div class="radarTop"><span>BOOKING RADAR</span><span class="live">● READY</span></div>
+      <div class="radarVisual">
+        <div class="ring r1"></div><div class="ring r2"></div><div class="ring r3"></div>
+        <div class="puck"><strong>CP</strong><small>WATCH</small></div>
+        <div class="marker m1">D</div><div class="marker m2">B</div><div class="marker m3">✦</div>
+      </div>
+      <div class="radarStats"><div><strong id="heroA">0</strong><span>alerts</span></div><div><strong id="heroM">0</strong><span>matches</span></div><div><strong>100+</strong><span>city-ready</span></div></div>
+    </aside>
+  </div>
+
+  <div class="controlbar">
+    <label class="search"><span>⌕</span><input id="q" placeholder="Search a movie, cinema or city"></label>
+    <select class="filter" id="city"><option value="">All India</option></select>
+    <select class="filter" id="language"><option value="">Language</option><option>Telugu</option><option>Hindi</option><option>English</option><option>Tamil</option><option>Kannada</option><option>Malayalam</option><option>Japanese</option></select>
+    <select class="filter" id="format"><option value="">Format</option><option>IMAX</option><option>4DX</option><option>Dolby Atmos</option><option>4K</option><option>3D</option><option>2D</option></select>
+    <button class="btn ghost" id="reset">Reset</button>
+  </div>
+</section>
+
+<section id="movies" class="section wrap">
+  <div class="sectionHead">
+    <div><div class="kicker">MOVIE RADAR</div><h2>Watch what matters to you</h2></div>
+    <div class="sublinks" id="movieTabs"><button class="active" data-tab="all">All</button><button data-tab="upcoming">Upcoming</button><button data-tab="now">Now showing</button></div>
+  </div>
+  <div class="grid4" id="movieGrid"></div>
+</section>
+
+<section id="alerts" class="section wrap">
+  <div class="sectionHead">
+    <div><div class="kicker">YOUR WATCHLIST</div><h2>Alerts without the noise</h2><p>Each watch can target a movie across multiple cinemas and provider handoffs.</p></div>
+    <button class="btn primary" id="create2">+ New alert</button>
+  </div>
+  <div class="alertLayout">
+    <div class="alertMain" id="alertGrid"></div>
+    <aside class="panel">
+      <div class="kicker">HOW A WATCH WORKS</div>
+      <div class="steps" style="margin-top:11px">
+        <div class="step"><div class="num">01</div><div><strong>Pick the movie</strong><span>Use the movie cards or type a title.</span></div></div>
+        <div class="step"><div class="num">02</div><div><strong>Choose the cinema universe</strong><span>Select one, several, or every cinema available in your city.</span></div></div>
+        <div class="step"><div class="num">03</div><div><strong>Define the drop</strong><span>FDFS, date range, screen, language, format and time.</span></div></div>
+        <div class="step"><div class="num">04</div><div><strong>Get the email</strong><span>When a verified feed matches, go straight to the official booking page.</span></div></div>
+      </div>
+    </aside>
+  </div>
+</section>
+
+<section id="cinemas" class="section wrap">
+  <div class="sectionHead"><div><div class="kicker">CINEMAS</div><h2>Find theatres by city</h2><p>ShowTing currently advertises large theatre selections for city/movie pages; CinePing is structured to support the same movie → city → theatre workflow.</p></div><button class="btn ghost" id="allTheatres">View all theatres</button></div>
+  <div class="sync"><div><strong>Provider catalogue status</strong><small>The UI is ready for live catalog feeds; direct automated syncing from District/BookMyShow requires an authorised data connection.</small></div><span class="syncBadge">CONNECT FEED</span></div>
+  <div class="theatreGrid" id="theatreGrid"></div>
+</section>
+
+<section id="how" class="section wrap">
+  <div class="sectionHead"><div><div class="kicker">DESIGNED FOR SPEED</div><h2>A cleaner ShowTing-style flow</h2></div></div>
+  <div class="infoGrid">
+    <div class="info"><strong>Movie-first alerts</strong><p>Open a movie, immediately see the city/cinema selection, then arm your alert instead of digging through settings.</p></div>
+    <div class="info"><strong>Multi-cinema watch</strong><p>Select many theatres in one alert, including a future “select all” mode when the live provider catalog is connected.</p></div>
+    <div class="info"><strong>Official booking handoff</strong><p>CinePing is an alert layer; booking stays on the provider's official page.</p></div>
+  </div>
+  <div class="note" style="margin-top:12px">Live provider syncing is deliberately shown as a connection point rather than fabricated. District's terms prohibit scraping/crawling or bypassing measures, so an authorised feed/API is needed for automated nationwide catalogue sync.</div>
+</section>
+
+<footer class="wrap"><span>© 2026 CinePing</span><span>Personalised movie alerts · no ticket sales</span><span><a href="privacy.html">Privacy</a> · <a href="terms.html">Terms</a></span></footer>
+</main>
+
+<div class="modalBg" id="modal" hidden>
+  <section class="modal" role="dialog" aria-modal="true" aria-labelledby="modalTitle">
+    <div class="modalHead"><div><div class="kicker">NEW WATCH</div><h2 class="modalTitle" id="modalTitle">Build your alert</h2></div><button class="close" id="close">×</button></div>
+    <form class="form" id="form">
+      <div class="row"><label class="field">Movie<input id="movieInput" required placeholder="e.g. The Paradise"></label><label class="field">City<select id="modalCity" required></select></label></div>
+      <label class="field">Theatres <span style="color:var(--subtle)">Select one or more</span><div class="theatreChoices" id="choices"></div></label>
+      <div class="row"><label class="field">Language<select id="modalLang"><option>Any</option><option>Telugu</option><option>Hindi</option><option>English</option><option>Tamil</option><option>Kannada</option><option>Malayalam</option><option>Japanese</option></select></label><label class="field">Format<select id="modalFormat"><option>Any</option><option>IMAX</option><option>4DX</option><option>Dolby Atmos</option><option>4K</option><option>3D</option><option>2D</option></select></label></div>
+      <div class="row"><label class="field">Show window<select id="modalTime"><option>Any time</option><option>FDFS only</option><option>Morning · 6–12</option><option>Afternoon · 12–5</option><option>Evening · 5–10</option><option>Late night · 10+</option></select></label><label class="field">Date preference<select id="modalDate"><option>Any date</option><option>Release day</option><option>Next day</option><option>This weekend</option><option>Specific date</option></select></label></div>
+      <label class="field">Booking sources <span class="checkrow"><label class="check"><input class="source" value="District" type="checkbox" checked> District</label><label class="check"><input class="source" value="BookMyShow" type="checkbox" checked> BookMyShow</label></span></label>
+      <label class="field">Email for alerts<input id="email" type="email" required autocomplete="email" placeholder="you@example.com"></label>
+      <div class="modalFoot"><small>Your alert stays in this browser until the email backend is connected. We never need your email password.</small><button class="btn primary" type="submit">Create alert →</button></div>
+    </form>
+  </section>
+</div>
+<div class="toast" id="toast"><strong id="toastTitle">Saved</strong><span id="toastText">Your alert was saved.</span></div>
+<div class="modalBg" id="successModal" hidden>
+  <section class="modal" role="dialog" aria-modal="true" aria-labelledby="successTitle">
+    <div style="display:grid;place-items:center;gap:12px;text-align:center;padding:20px 10px 14px">
+      <div style="width:58px;height:58px;border-radius:50%;display:grid;place-items:center;background:rgba(184,242,139,.12);color:var(--mint);font-size:28px;border:1px solid rgba(184,242,139,.24)">✓</div>
+      <div>
+        <div class="kicker">WATCH CREATED</div>
+        <h2 class="modalTitle" id="successTitle" style="margin-top:7px">Alert created successfully</h2>
+        <p id="successText" style="margin:8px auto 0;max-width:560px;color:var(--muted);font-size:10px;line-height:1.7"></p>
+      </div>
+      <button class="btn primary" id="successDone">Done</button>
+    </div>
+  </section>
+</div>
+
+<script>
+const CITIES=['Hyderabad','Guntur','Vijayawada','Visakhapatnam','Bengaluru','Chennai','Mumbai','Delhi NCR','Pune','Kolkata','Kochi','Ahmedabad','Jaipur','Lucknow','Indore','Nagpur','Nellore','Tirupati','Kurnool','Kakinada','Coimbatore','Mysuru','Surat','Chandigarh','Patna','Bhopal','Guwahati','Agra','Vadodara','Kanpur','Noida','Gurugram','Faridabad','Ghaziabad','Bhubaneswar','Ranchi','Raipur','Varanasi','Amritsar','Ludhiana','Panaji','Nashik','Rajkot','Udaipur','Dehradun','Mangalore','Madurai','Salem','Thrissur','Thiruvananthapuram','Warangal','Rajahmundry','Anantapur','Kadapa'];
+const THEATRES={Hyderabad:['Prasads Multiplex','ALLU Cinemas: Kokapet','AMB Cinemas: Gachibowli','PVR: Lakeshore Mall','PVR: Inorbit, Cyberabad','Asian Shiva Ganga: Dilsukhnagar','Cinepolis: TNR North City','EART Cinemas: Vanasthalipuram','AAA Cinemas: Ameerpet','Asian Lakshmikala Cinepride: Moosapet','Bhramaramba 70MM','Devi 70MM 4K','PVR: Preston, Gachibowli','Asian Jyothi: RC Puram','INOX: Sattva Necklace Mall','PVR: Atrium Gachibowli','Asian Tarakarama Cineplex','Arjun 70MM','Miraj Cinemas: A2A Central Mall','Asian M Cube Mall','PVR: Next Galleria Mall','Sandhya 35mm','Gokul 70MM','Aparna Cinemas','Vyjayanthi Cinema','Sri Ramana 70MM','Cinepolis: DSL Virtue Mall','Asian Cineplanet Multiplex','PVR ICON: Hitech','Ramakrishna Glitterati','Platinum Movietime Cinema','Miraj Cinemas: Raghavendra'],Guntur:['Cine Prime','Siva Cinemas Dolby Atmos','Cine Square Dolby Atmos','Bollywood Theatre','Venkatesh Cinemas','Hari Hara Mahadev'],Vijayawada:['INOX: LEPL','PVR: Ripples Mall','Capital Cinemas','Sairam Cinemas','Raj Yuvraj Theatre','Swathi Cinema'],Visakhapatnam:['INOX: CMR Central','Cinepolis: CMR Central','Melody Theatre','Sangam Sarat Theatre','Kameswari Cinema'],Bengaluru:['PVR IMAX: Forum','Cinepolis: Forum Shantiniketan','INOX: Nexus Mall','PVR: Orion Mall','Cinepolis: ETA Mall','Galaxy Cinemas'],Chennai:['PVR: Palazzo','Luxe Cinemas','AGS Cinemas','Rohini Silver Screens','Sathyam Cinemas','Kamala Cinemas'],Mumbai:['PVR ICON: Phoenix','INOX: R City','Cinepolis: Viviana','Metro INOX','PVR: Juhu','Regal Cinema'],'Delhi NCR':['PVR: Pacific','INOX: Nehru Place','Cinepolis: DLF Avenue','PVR Directors Cut','INOX: Logix','PVR: Promenade']};
+const MOVIES=[
+{title:'The Paradise',city:'Hyderabad',langs:['Telugu','Hindi','Tamil','Malayalam','Kannada'],fmts:['2D','4K','Dolby Atmos'],status:'upcoming',date:'24 Sep 2026',art:'a',label:'THE<br>PARADISE'},
+{title:'Spider-Man: Brand New Day',city:'Bengaluru',langs:['English','Hindi','Tamil','Telugu'],fmts:['2D','IMAX','4DX'],status:'now',date:'Now showing',art:'b',label:'SPIDER-MAN<br>BRAND NEW DAY'},
+{title:'Demon Slayer: Infinity Castle',city:'Hyderabad',langs:['Japanese','English'],fmts:['2D','IMAX'],status:'now',date:'Now showing',art:'c',label:'DEMON SLAYER<br>INFINITY CASTLE'},
+{title:'Awarapan 2',city:'Mumbai',langs:['Hindi'],fmts:['2D','4K'],status:'now',date:'Now showing',art:'d',label:'AWARAPAN<br>2'},
+{title:'Vishwanath & Sons',city:'Hyderabad',langs:['Telugu','Tamil'],fmts:['2D','Dolby Atmos'],status:'upcoming',date:'28 Sep 2026',art:'a',label:'VISHWANATH<br>& SONS'},
+{title:'Batwara 1947',city:'Delhi NCR',langs:['Hindi'],fmts:['2D'],status:'now',date:'Now showing',art:'c',label:'BATWARA<br>1947'},
+{title:'Makutam',city:'Bengaluru',langs:['Telugu'],fmts:['2D','4K'],status:'upcoming',date:'25 Sep 2026',art:'d',label:'MAKUTAM'},
+{title:'The Odyssey',city:'Chennai',langs:['English'],fmts:['IMAX','4DX','2D'],status:'now',date:'Now showing',art:'b',label:'THE<br>ODYSSEY'}
+];
+const defaults={city:'Hyderabad',theme:'dark',email:''};
+let prefs={...defaults,...JSON.parse(localStorage.getItem('cineping-v4-prefs')||'{}')};
+let alerts=JSON.parse(localStorage.getItem('cineping-v4-alerts')||'null')||[
+{movie:'The Paradise',city:'Hyderabad',theatres:['Prasads Multiplex','PVR ICON: Hitech'],language:'Any',format:'IMAX',time:'FDFS only',date:'Release day',sources:['District','BookMyShow'],status:'ARMED'},
+{movie:'Spider-Man: Brand New Day',city:'Bengaluru',theatres:['PVR IMAX: Forum'],language:'English',format:'IMAX',time:'Evening · 5–10',date:'Any date',sources:['District','BookMyShow'],status:'MATCHED'}
+];
+const $=s=>document.querySelector(s),$$=s=>[...document.querySelectorAll(s)];
+const esc=v=>String(v??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]||c));
+function save(){localStorage.setItem('cineping-v4-prefs',JSON.stringify(prefs));localStorage.setItem('cineping-v4-alerts',JSON.stringify(alerts))}
+function toast(t,m){$('#toastTitle').textContent=t;$('#toastText').textContent=m;$('#toast').classList.add('show');clearTimeout(window._toast);window._toast=setTimeout(()=>$('#toast').classList.remove('show'),2800)}
+function cities(){for(const id of ['city','modalCity']){const el=$('#'+id);const val=id==='modalCity'?prefs.city:el.value;el.innerHTML=id==='city'?'<option value="">All India</option>':'';CITIES.forEach(c=>{const o=document.createElement('option');o.value=c;o.textContent=c;o.selected=c===val;el.appendChild(o)})}}
+function theatreChoices(){const list=THEATRES[$('#modalCity').value]||['PVR / INOX','Cinepolis','Local cinemas'];$('#choices').innerHTML=list.map(t=>'<button type="button" class="choice" data-t="'+esc(t)+'">'+esc(t)+'</button>').join('');$$('.choice').forEach(b=>b.onclick=()=>b.classList.toggle('on'))}
+function openAlert(movie='',city=''){cities();$('#modal').hidden=false;$('#movieInput').value=movie;$('#modalCity').value=city||prefs.city;$('#email').value=prefs.email||'';theatreChoices();document.body.style.overflow='hidden'}
+function closeAlert(){$('#modal').hidden=true;document.body.style.overflow=''}
+function renderMovies(){const q=$('#q').value.toLowerCase(),c=$('#city').value,l=$('#language').value,f=$('#format').value,tab=document.querySelector('#movieTabs .active')?.dataset.tab||'all';const data=MOVIES.filter(m=>(tab==='all'||m.status===tab)&&(!c||m.city===c)&&(!l||m.langs.includes(l))&&(!f||m.fmts.includes(f))&&(!q||[m.title,m.city,...m.langs].join(' ').toLowerCase().includes(q)));$('#movieGrid').innerHTML=data.map(m=>'<article class="movie"><div class="art '+m.art+'"><div class="artTitle">'+m.label+'</div></div><div class="movieBody"><div class="movieTitle">'+esc(m.title)+'</div><div class="movieMeta">'+esc(m.city)+' · '+esc(m.date)+'</div><div class="chips">'+m.langs.slice(0,3).map(x=>'<span class="chip">'+esc(x)+'</span>').join('')+'<span class="chip">'+esc(m.fmts[0])+'</span></div><div class="movieFoot"><span class="date">'+(m.status==='upcoming'?'Upcoming':'Now showing')+'</span><button class="arm" data-movie="'+esc(m.title)+'" data-city="'+esc(m.city)+'">Notify me</button></div></div></article>').join('')||'<div class="panel" style="grid-column:1/-1">No movies match those filters.</div>';$$('[data-movie]').forEach(b=>b.onclick=()=>openAlert(b.dataset.movie,b.dataset.city))}
+function renderAlerts(){const list=alerts;$('#alertCount').textContent=list.length;$('#heroA').textContent=list.length;$('#heroM').textContent=list.filter(a=>a.status==='MATCHED').length;$('#alertGrid').innerHTML=list.map((a,i)=>'<article class="alertCard"><div class="alertHeader"><div><strong>'+esc(a.movie)+'</strong><div class="movieMeta">'+esc(a.city)+' · '+esc(a.date)+'</div></div><span class="status">'+esc(a.status)+'</span></div><div class="alertLine"></div><div class="chips"><span class="chip">'+esc(a.language)+'</span><span class="chip">'+esc(a.format)+'</span><span class="chip">'+esc(a.time)+'</span>'+a.theatres.slice(0,3).map(t=>'<span class="chip">'+esc(t)+'</span>').join('')+'</div><div class="alertActions"><button class="tiny" data-del="'+i+'">Delete</button><button class="tiny" data-edit="'+i+'">Edit</button></div></article>').join('');$$('[data-del]').forEach(b=>b.onclick=()=>{alerts.splice(+b.dataset.del,1);save();renderAlerts();toast('Alert removed','Your watch was removed.')});$$('[data-edit]').forEach(b=>b.onclick=()=>{const a=alerts[+b.dataset.edit];openAlert(a.movie,a.city)})}
+function renderTheatres(){const city=prefs.city;const list=THEATRES[city]||THEATRES.Hyderabad;$('#cityPill').textContent='⌖ '+city;$('#theatreGrid').innerHTML=list.slice(0,12).map((t,i)=>'<article class="theatre"><div class="theatreTop"><div class="theatreName">'+esc(t)+'</div><div class="km">'+(1.8+(i*1.9)%14).toFixed(1)+' km</div></div><div class="theatreMeta">'+(i%2?'Premium screens · multiple formats':'Cinema · showtime-ready')+'</div><div class="theatreBottom"><span class="count">'+((i%4)+2)+' screens</span><button class="selectTheatre" data-theatre="'+esc(t)+'">Add to alert</button></div></article>').join('');$$('[data-theatre]').forEach(b=>b.onclick=()=>openAlert('',city))}
+$('#create').onclick=()=>openAlert();$('#create2').onclick=()=>openAlert();$('#close').onclick=closeAlert;$('#modal').onclick=e=>{if(e.target.id==='modal')closeAlert()};$('#modalCity').onchange=theatreChoices;
+const API_BASE='https://cineping-alert-api.sumanthbabu12345.workers.dev';
+let alertSubmitting=false;
+async function apiCreateAlert(payload){
+  const r=await fetch(API_BASE+'/api/alerts',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify(payload)});
+  let data={}; try{data=await r.json()}catch{}
+  if(!r.ok) throw new Error(data.error||'Alert service is unavailable');
+  return data;
+}
+function openSuccess(message){
+  $('#successText').textContent=message;
+  $('#successModal').hidden=false;
+  document.body.style.overflow='hidden';
+}
+function closeSuccess(){
+  $('#successModal').hidden=true;
+  document.body.style.overflow='';
+}
+$('#successDone').onclick=closeSuccess;
+$('#successModal').onclick=e=>{if(e.target.id==='successModal')closeSuccess()};
+closeSuccess();
+$('#form').onsubmit=async e=>{
+  e.preventDefault();
+  if(alertSubmitting) return;
+  const theatres=$$('.choice.on').map(x=>x.dataset.t);
+  const sources=$$('.source:checked').map(x=>x.value);
+  const email=$('#email').value.trim();
+  const movie=$('#movieInput').value.trim();
+  if(!email)return toast('Email required','Enter an email for alerts.');
+  if(!movie)return toast('Movie required','Enter the movie you want to watch.');
+  const a={movie,city:$('#modalCity').value,theatres,language:$('#modalLang').value,format:$('#modalFormat').value,time:$('#modalTime').value,date:$('#modalDate').value,sources,status:'ARMED'};
+  const submit=e.submitter;
+  alertSubmitting=true;
+  if(submit){submit.disabled=true;submit.textContent='Creating…';}
+  toast('Creating alert','Saving your watch securely…');
+  try{
+    const result=await apiCreateAlert({...a,email});
+    prefs.email=email;
+    alerts=[a,...alerts];
+    save();
+    closeAlert();
+    renderAll();
+    openSuccess(result.emailSent
+      ? movie+' is now registered. A confirmation email has also been sent through Brevo.'
+      : movie+' is now registered in CinePing. The alert is active, but the confirmation email could not be sent.');
+  }catch(err){
+    toast('Could not create alert',err.message||'Please try again.');
+  }finally{
+    alertSubmitting=false;
+    if(submit){submit.disabled=false;submit.textContent='Create alert →';}
+  }
+}
+$('#q').oninput=()=>{renderMovies();renderAlerts()};['#city','#language','#format'].forEach(id=>$(id).onchange=()=>{renderMovies();renderAlerts()});$('#reset').onclick=()=>{$('#q').value='';$('#city').value='';$('#language').value='';$('#format').value='';renderMovies();renderAlerts()};$$('#movieTabs button').forEach(b=>b.onclick=()=>{$$('#movieTabs button').forEach(x=>x.classList.remove('active'));b.classList.add('active');renderMovies()});$('#theme').onclick=()=>{document.body.classList.toggle('light');prefs.theme=document.body.classList.contains('light')?'light':'dark';save()};$('#allTheatres').onclick=()=>{document.querySelector('#cinemas').scrollIntoView({behavior:'smooth'})};
+function renderAll(){cities();renderMovies();renderAlerts();renderTheatres()}
+renderAll();
+if(prefs.theme==='light')document.body.classList.add('light');
+</script>
+</body>
+</html>
