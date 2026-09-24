@@ -155,9 +155,9 @@ const DISTRICT_MOVIES_URL = "https://api.parse.bot/scraper/9dbc34b2-b7c3-4e9b-95
 const DISTRICT_SHOWTIMES_URL = "https://api.parse.bot/scraper/9dbc34b2-b7c3-4e9b-9540-6d2bb2568c57/get_movie_showtimes";
 
 const MONTHLY_CREDIT_CAP = 190;
-const MAX_SHOWTIME_CALLS_PER_TARGET = 12;
+const MAX_SHOWTIME_CALLS_PER_TARGET = 7;
 const CREATION_BURST_CALLS = 5;
-const BURST_INTERVAL_MINUTES = 10;
+const BURST_INTERVAL_MINUTES = 5;
 const NEAR_DATE_INTERVAL_MINUTES = 360;
 const NORMAL_INTERVAL_MINUTES = 2880;
 const MOVIE_CACHE_HOURS = 168;
@@ -682,7 +682,7 @@ export default {
         mailConfigured: !!(env.BREVO_API_KEY && env.BREVO_FROM_EMAIL),
         districtConfigured: !!env.PARSE_API_KEY,
         schedulerConfigured: !!env.PARSE_API_KEY,
-        monthlyBudget: MONTHLY_CREDIT_CAP,
+        monthlyBudget: MONTHLY_CREDIT_CAP, monitorPolicy: { burstChecks: CREATION_BURST_CALLS, burstEveryMinutes: BURST_INTERVAL_MINUTES, nearDateEveryMinutes: NEAR_DATE_INTERVAL_MINUTES, maxShowtimeCallsPerTarget: MAX_SHOWTIME_CALLS_PER_TARGET },
         usage: usage ? {
           credits: Number(usage.credits_used || 0),
           catalogCalls: Number(usage.catalog_calls || 0),
