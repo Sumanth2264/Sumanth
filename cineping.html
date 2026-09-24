@@ -474,8 +474,9 @@ function renderTheatres(){
       '<div class="showPills">'+(pills||'<span class="detailLine">No showtime details returned</span>')+'</div>'+
       '<div class="theatreBottom"><span class="count">'+esc(provider)+'</span><div class="theatreActions"><button class="selectTheatre" data-context-theatre="'+esc(t.name)+'">Notify here</button></div></div></article>';
     }).join('');
-  $('#contextAlert')?.addEventListener('click',()=>openAlert(movie,city,provider,liveMovies.find(m=>m.title===movie)?.id||''));
-  $$('[data-context-theatre]').forEach(b=>b.onclick=()=>openAlert(movie,city,provider,liveMovies.find(m=>m.title===movie)?.id||''));
+  // Re-resolve the movie by title in the chosen provider; the merged catalogue may carry a different provider ID.
+  $('#contextAlert')?.addEventListener('click',()=>openAlert(movie,city,provider,''));
+  $('[data-context-theatre]').forEach(b=>b.onclick=()=>openAlert(movie,city,provider,''));
 }
 function syncSpecificDate(){const wrap=$('#specificDateWrap');const on=$('#modalDate').value==='Specific date';wrap.style.display=on?'grid':'none';$('#specificDate').required=on;$('#specificDate').min=new Date().toISOString().slice(0,10);}
 $('#create').onclick=()=>openAlert();$('#create2').onclick=()=>openAlert();$('#close').onclick=closeAlert;$('#modal').onclick=e=>{if(e.target.id==='modal')closeAlert()};
