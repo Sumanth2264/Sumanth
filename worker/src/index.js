@@ -612,7 +612,7 @@ async function pollTarget(env, targetKey, immediate = false) {
     result.sent,
     isoNoZ(new Date()),
     isoNoZ(next),
-    burstRemaining,
+    nextBurstRemaining,
     usageMonth,
     newCalls,
     targetKey
