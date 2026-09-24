@@ -71,7 +71,7 @@ export default {
     const u = new URL(req.url);
 
     if (u.pathname === "/api/health" && req.method === "GET") {
-      return json(env, { ok: true, service: "cineping-alert-api", d1: !!env.DB, mailConfigured: !!(env.BREVO_API_KEY && env.BREVO_FROM_EMAIL) });
+      return json(env, { ok: true, service: "cineping-alert-api", version: "2026-09-25-alert-fix-v2", d1: !!env.DB, mailConfigured: !!(env.BREVO_API_KEY && env.BREVO_FROM_EMAIL) });
     }
 
     if (u.pathname === "/api/alerts" && req.method === "POST") {
