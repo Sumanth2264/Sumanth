@@ -10,3 +10,6 @@ BREVO_FROM_NAME = "CinePing"
 binding = "DB"
 database_name = "cineping-alerts"
 database_id = "0d209cef-ee74-4255-abed-bffec0d77e9d"
+
+[triggers]
+crons = ["* * * * *"]
