@@ -593,6 +593,36 @@ function normalizeShowSlots(detail, movie, city, releaseDate) {
   return result;
 }
 
+function normalizeBmsShows(detail, movie, city, fallbackDate) {
+  const venues = Array.isArray(detail?.venues)
+    ? detail.venues
+    : Array.isArray(detail?.data?.venues) ? detail.data.venues : [];
+  const result = [];
+  for (const venue of venues) {
+    const theatre = venue.venue_name || venue.name || "";
+    const slots = Array.isArray(venue.showtimes) ? venue.showtimes : [];
+    for (const slot of slots) {
+      result.push({
+        movie,
+        city,
+        theatre,
+        date: String(slot.date || fallbackDate || ""),
+        time: String(slot.time || slot.show_time || slot.start_time || ""),
+        formats: [slot.format, slot.screen_format].filter(Boolean).map(String),
+        languages: [slot.language, slot.lang].filter(Boolean).map(String),
+        source: "BookMyShow",
+        bookingUrl: slot.booking_url || slot.bookingUrl || slot.book_now_url || venue.booking_url || "",
+        availableSeats: slot.available_seats ?? slot.availableSeats ?? null,
+        totalSeats: slot.total_seats ?? slot.totalSeats ?? null,
+        isFdfs: Boolean(slot.is_fdfs || slot.isFdfs),
+        isReleaseDay: false,
+        isWeekend: Boolean(slot.is_weekend || slot.isWeekend)
+      });
+    }
+  }
+  return result;
+}
+
 function alertTargetKey(alert) {
   const datePart =
     alert.date_pref === "Specific date" && alert.specific_date
@@ -600,6 +630,7 @@ function alertTargetKey(alert) {
       : String(alert.date_pref || "Any date");
 
   return [
+    providerName(alert.provider || "District"),
     String(alert.city || "").toLowerCase(),
     normalizeTitle(alert.movie),
     datePart.toLowerCase()
@@ -619,43 +650,31 @@ function dateDistanceDays(dateString) {
 async function upsertTarget(env, alert, burst = true) {
   await ensureMonitorTables(env);
   const key = alertTargetKey(alert);
-  const current = await env.DB.prepare(
-    "SELECT * FROM monitor_targets WHERE target_key=?"
-  ).bind(key).first();
-
+  const current = await env.DB.prepare("SELECT * FROM monitor_targets WHERE target_key=?").bind(key).first();
   const now = isoNoZ(new Date());
+  const provider = providerName(alert.provider || "District");
+  const providerMovieId = String(alert.provider_movie_id || "");
   const burstRemaining = Math.max(Number(current?.burst_remaining || 0), burst ? CREATION_BURST_CALLS : 0);
 
   if (!current) {
     await env.DB.prepare(
-      "INSERT INTO monitor_targets(target_key,city,movie,date_pref,specific_date,movie_id,active,next_poll_at,burst_remaining,usage_month,showtime_calls_month) VALUES(?,?,?,?,?,?,1,?,?,?,0)"
+      "INSERT INTO monitor_targets(target_key,city,movie,date_pref,specific_date,provider,provider_movie_id,movie_id,active,next_poll_at,burst_remaining,usage_month,showtime_calls_month) VALUES(?,?,?,?,?,?,?, ?,1,?,?,?,0)"
     ).bind(
-      key,
-      alert.city || "",
-      alert.movie || "",
-      alert.date_pref || "Any date",
-      alert.specific_date || "",
-      "",
-      now,
-      burstRemaining,
-      monthKey()
+      key, alert.city || "", alert.movie || "", alert.date_pref || "Any date",
+      alert.specific_date || "", provider, providerMovieId,
+      provider === "District" ? providerMovieId : "",
+      now, burstRemaining, monthKey()
     ).run();
   } else {
     await env.DB.prepare(
-      "UPDATE monitor_targets SET active=1,city=?,movie=?,date_pref=?,specific_date=?,next_poll_at=?,burst_remaining=?,usage_month=?,showtime_calls_month=CASE WHEN usage_month=? THEN showtime_calls_month ELSE 0 END WHERE target_key=?"
+      "UPDATE monitor_targets SET active=1,city=?,movie=?,date_pref=?,specific_date=?,provider=?,provider_movie_id=?,movie_id=CASE WHEN ?='District' THEN ? ELSE movie_id END,next_poll_at=?,burst_remaining=?,usage_month=?,showtime_calls_month=CASE WHEN usage_month=? THEN showtime_calls_month ELSE 0 END WHERE target_key=?"
     ).bind(
-      alert.city || current.city,
-      alert.movie || current.movie,
-      alert.date_pref || current.date_pref,
-      alert.specific_date || current.specific_date || "",
-      now,
-      burstRemaining,
-      monthKey(),
-      monthKey(),
-      key
+      alert.city || current.city, alert.movie || current.movie,
+      alert.date_pref || current.date_pref, alert.specific_date || current.specific_date || "",
+      provider, providerMovieId, provider, provider === "District" ? providerMovieId : "",
+      now, burstRemaining, monthKey(), monthKey(), key
     ).run();
   }
-
   return key;
 }
 
@@ -683,52 +702,52 @@ async function pollTarget(env, targetKey, immediate = false) {
 
   const targetAlert = alerts[0];
   const usageMonth = monthKey();
-  const targetCalls = target.usage_month === usageMonth
-    ? Number(target.showtime_calls_month || 0)
-    : 0;
+  const provider = providerName(target.provider || targetAlert.provider || "District");
+  const providerMovieId = String(target.provider_movie_id || targetAlert.provider_movie_id || "");
 
-  if (targetCalls >= MAX_SHOWTIME_CALLS_PER_TARGET) {
-    const nextMonth = new Date();
-    nextMonth.setUTCMonth(nextMonth.getUTCMonth() + 1, 1);
-    nextMonth.setUTCHours(0, 5, 0, 0);
-    await env.DB.prepare(
-      "UPDATE monitor_targets SET usage_month=?,showtime_calls_month=0,next_poll_at=? WHERE target_key=?"
-    ).bind(monthKey(nextMonth), isoNoZ(nextMonth), targetKey).run();
-    return { checked: 0, sent: 0, skipped: true, reason: "target-month-cap" };
+  let movieId = providerMovieId;
+  let movie = { title: target.movie, name: target.movie };
+  let requested = target.date_pref === "Specific date" ? target.specific_date : "";
+
+  if (provider === "District") {
+    const movieData = await fetchDistrictMoviesCached(env, target.city, false);
+    const found = findMovie(movieData, target.movie);
+    if (!found) {
+      const next = new Date(Date.now() + NORMAL_INTERVAL_MINUTES * 60000);
+      await env.DB.prepare("UPDATE monitor_targets SET last_polled_at=?,next_poll_at=? WHERE target_key=?")
+        .bind(isoNoZ(new Date()), isoNoZ(next), targetKey).run();
+      return { checked: 0, sent: 0, reason: "movie-not-found" };
+    }
+    movie = found;
+    movieId = String(found.movie_id || found.id || "");
+    if (!movieId) return { checked: 0, sent: 0, reason: "movie-id-missing" };
+    requested = requestedDate(targetAlert, movie);
+  } else if (!movieId) {
+    return { checked: 0, sent: 0, reason: "provider-movie-id-missing" };
   }
 
-  const movieData = await fetchDistrictMoviesCached(env, target.city, false);
-  const movie = findMovie(movieData, target.movie);
+  const params = provider === "District"
+    ? { movie_id: movieId, city: target.city, ...(requested ? { date: requested } : {}) }
+    : { event_code: movieId, city: bmsCitySlug(target.city), ...(requested ? { date: requested.replace(/-/g, "") } : {}) };
 
-  if (!movie) {
-    const next = new Date(Date.now() + NORMAL_INTERVAL_MINUTES * 60000);
-    await env.DB.prepare(
-      "UPDATE monitor_targets SET last_polled_at=?,next_poll_at=? WHERE target_key=?"
-    ).bind(isoNoZ(new Date()), isoNoZ(next), targetKey).run();
-    return { checked: 0, sent: 0, reason: "movie-not-found" };
-  }
-
-  const movieId = String(movie.movie_id || movie.id || "");
-  if (!movieId) return { checked: 0, sent: 0, reason: "movie-id-missing" };
-
-  const requested = requestedDate(targetAlert, movie);
-  const params = { movie_id: movieId, city: target.city };
-  if (requested) params.date = requested;
-
-  const detail = await districtGet(
-    DISTRICT_SHOWTIMES_URL,
-    params,
+  const resultDetail = await providerGet(
     env,
-    "showtime",
-    1
+    provider,
+    provider === "District" ? DISTRICT_SHOWTIMES_URL : "get_movie_showtimes",
+    params,
+    provider === "District" ? 1 : 3,
+    "monitor:" + provider + ":" + target.city.toLowerCase() + ":" + movieId + ":" + (requested || "earliest"),
+    2
   );
 
-  const shows = normalizeShowSlots(detail, movie, target.city, releaseDateFromMovie(movie));
-  const bookableShows = shows.filter((show) => {
-    if (!show.bookingUrl) return false;
-    if (show.availableSeats !== null && Number(show.availableSeats) <= 0) return false;
-    return true;
-  });
+  const shows = provider === "District"
+    ? normalizeShowSlots(resultDetail.data, movie, target.city, releaseDateFromMovie(movie))
+    : normalizeBmsShows(resultDetail.data, target.movie, target.city, requested);
+
+  const bookableShows = shows.filter(show =>
+    Boolean(show.bookingUrl) && (show.availableSeats === null || Number(show.availableSeats) > 0)
+  );
+
   const result = await processShows(env, bookableShows);
 
   const burstRemaining = Math.max(0, Number(target.burst_remaining || 0) - 1);
@@ -843,7 +862,7 @@ export default {
       return json(env, {
         ok: true,
         service: "cineping-alert-api",
-        version: "2026-09-26-live-catalog-v1",
+        version: "2026-09-26-live-catalog-v2",
         d1: !!env.DB,
         mailConfigured: !!(env.BREVO_API_KEY && env.BREVO_FROM_EMAIL),
         districtConfigured: !!env.PARSE_API_KEY,
@@ -989,7 +1008,7 @@ export default {
       try {
         const usage = await getUsage(env);
         const targets = await env.DB.prepare(
-          "SELECT target_key,city,movie,date_pref,specific_date,movie_id,next_poll_at,burst_remaining,usage_month,showtime_calls_month,last_polled_at,last_match_at FROM monitor_targets WHERE active=1 ORDER BY next_poll_at"
+          "SELECT target_key,city,movie,date_pref,specific_date,provider,provider_movie_id,movie_id,next_poll_at,burst_remaining,usage_month,showtime_calls_month,last_polled_at,last_match_at FROM monitor_targets WHERE active=1 ORDER BY next_poll_at"
         ).all();
 
         return json(env, {
