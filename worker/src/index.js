@@ -156,7 +156,7 @@ const DISTRICT_SHOWTIMES_URL = "https://api.parse.bot/scraper/9dbc34b2-b7c3-4e9b
 
 const MONTHLY_CREDIT_CAP = 190;
 const MAX_SHOWTIME_CALLS_PER_TARGET = 7;
-const CREATION_BURST_CALLS = 5;
+const CREATION_BURST_CALLS = 4;
 const BURST_INTERVAL_MINUTES = 5;
 const NEAR_DATE_INTERVAL_MINUTES = 360;
 const NORMAL_INTERVAL_MINUTES = 2880;
@@ -579,20 +579,27 @@ async function pollTarget(env, targetKey, immediate = false) {
   const newCalls = targetCalls + 1;
   const burstRemaining = Math.max(0, Number(target.burst_remaining || 0) - 1);
 
+  const dist = dateDistanceDays(requested || releaseDateFromMovie(movie));
+  const priorityWindow = dist !== null && dist <= 1 && dist >= -1;
+  const nearWindow = dist !== null && dist <= 3 && dist >= -3;
+
   let nextDelayMinutes;
+  let nextBurstRemaining = burstRemaining;
+
   if (result.sent > 0) {
     nextDelayMinutes = 1440;
-  } else if (burstRemaining > 0) {
+    nextBurstRemaining = 0;
+  } else if (priorityWindow && burstRemaining > 0) {
     nextDelayMinutes = BURST_INTERVAL_MINUTES;
+    nextBurstRemaining = Math.max(0, burstRemaining - 1);
+  } else if (dist !== null && dist > 3) {
+    nextDelayMinutes = dist <= 7 ? 720 : NORMAL_INTERVAL_MINUTES;
+  } else if (nearWindow) {
+    nextDelayMinutes = 360;
+  } else if (burstRemaining > 0 && requested) {
+    nextDelayMinutes = 720;
   } else {
-    const dist = dateDistanceDays(requested);
-    if (dist !== null && dist >= -1 && dist <= 1) {
-      nextDelayMinutes = BURST_INTERVAL_MINUTES;
-    } else if (dist !== null && Math.abs(dist) <= 3) {
-      nextDelayMinutes = NEAR_DATE_INTERVAL_MINUTES;
-    } else {
-      nextDelayMinutes = NORMAL_INTERVAL_MINUTES;
-    }
+    nextDelayMinutes = NORMAL_INTERVAL_MINUTES;
   }
 
   const next = new Date(Date.now() + nextDelayMinutes * 60000);
@@ -682,7 +689,7 @@ export default {
         mailConfigured: !!(env.BREVO_API_KEY && env.BREVO_FROM_EMAIL),
         districtConfigured: !!env.PARSE_API_KEY,
         schedulerConfigured: !!env.PARSE_API_KEY,
-        monthlyBudget: MONTHLY_CREDIT_CAP, monitorPolicy: { burstChecks: CREATION_BURST_CALLS, burstEveryMinutes: BURST_INTERVAL_MINUTES, nearDateEveryMinutes: NEAR_DATE_INTERVAL_MINUTES, maxShowtimeCallsPerTarget: MAX_SHOWTIME_CALLS_PER_TARGET },
+        monthlyBudget: MONTHLY_CREDIT_CAP, monitorPolicy: { initialCheck: "immediate", priorityEveryMinutes: BURST_INTERVAL_MINUTES, preWindowEveryMinutes: NEAR_DATE_INTERVAL_MINUTES, normalEveryMinutes: NORMAL_INTERVAL_MINUTES, maxShowtimeCallsPerTarget: MAX_SHOWTIME_CALLS_PER_TARGET, monthlyCreditSafetyCap: MONTHLY_CREDIT_CAP },
         usage: usage ? {
           credits: Number(usage.credits_used || 0),
           catalogCalls: Number(usage.catalog_calls || 0),
