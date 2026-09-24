@@ -414,8 +414,27 @@ async function loadModalTheatres(){
   fillMovieMeta(movie);
   const date=$('#modalDate').value==='Specific date'?$('#specificDate').value:($('#liveAvailableDate')?.value||'');
   try{
-    const data=await apiJson('/api/showtimes',{source:provider,city:$('#modalCity').value,movieId:movie.id,movie:movie.title,date});
+    let data=await apiJson('/api/showtimes',{source:provider,city:$('#modalCity').value,movieId:movie.id,movie:movie.title,date});
     theatreChoicesFromData(data);
+
+    // Providers default to today's shows when no date is supplied. For an upcoming
+    // movie that can be empty even though future dates already have cinemas.
+    // Automatically retry the first available future date so the theatre selector
+    // behaves like a movie -> theatre -> date flow instead of looking broken.
+    if(!date && (!Array.isArray(data.theatres)||!data.theatres.length) && Array.isArray(data.availableDates) && data.availableDates.length){
+      const today=new Date().toISOString().slice(0,10);
+      const first=data.availableDates
+        .map(normalizeAvailableDate)
+        .filter(Boolean)
+        .sort()
+        .find(x=>x>=today);
+      if(first){
+        data=await apiJson('/api/showtimes',{source:provider,city:$('#modalCity').value,movieId:movie.id,movie:movie.title,date:first});
+        theatreChoicesFromData(data);
+        if($('#liveAvailableDate'))$('#liveAvailableDate').value=first;
+        $('#theatreStatus').textContent=(data.theatres?.length||0)+' live theatres · '+provider+' · '+first;
+      }
+    }
     if($('#liveAvailableDate')&&date)$('#liveAvailableDate').value=date;
   }catch(err){
     $('#theatreStatus').textContent=err.message||'Could not load live theatres';
