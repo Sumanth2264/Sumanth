@@ -1,8 +1,10 @@
-const jsonHeaders = (env) => ({
+const ALLOWED_ORIGIN = "https://sumanth2264.github.io";
+const jsonHeaders = (env, origin = ALLOWED_ORIGIN) => ({
   "content-type": "application/json; charset=utf-8",
-  "Access-Control-Allow-Origin": env.APP_URL || "*",
+  "Access-Control-Allow-Origin": origin === ALLOWED_ORIGIN ? ALLOWED_ORIGIN : ALLOWED_ORIGIN,
   "Access-Control-Allow-Headers": "content-type,x-ingest-secret",
-  "Access-Control-Allow-Methods": "GET,POST,OPTIONS"
+  "Access-Control-Allow-Methods": "GET,POST,OPTIONS",
+  "Vary": "Origin"
 });
 
 const json = (env, data, status = 200) =>
@@ -56,7 +58,14 @@ function match(alert, show) {
 export default {
   async fetch(req, env) {
     if (req.method === "OPTIONS") {
-      return new Response("", { headers: jsonHeaders(env) });
+      const origin = req.headers.get("Origin") || "";
+      return new Response(null, {
+        status: 204,
+        headers: {
+          ...jsonHeaders(env, origin),
+          "Access-Control-Max-Age": "86400"
+        }
+      });
     }
 
     const u = new URL(req.url);
