@@ -217,6 +217,41 @@ async function ensureMonitorTables(env) {
   ).bind(monthKey()).run();
 }
 
+async function getMonitorState(env) {
+  await ensureMonitorTables(env);
+  return env.DB.prepare(
+    "SELECT * FROM monitor_state WHERE id=1"
+  ).first();
+}
+
+async function setMonitorState(env, patch) {
+  await ensureMonitorTables(env);
+  const current = await getMonitorState(env) || {
+    last_run_at: null,
+    last_success_at: null,
+    next_run_at: null,
+    checked: 0,
+    sent: 0
+  };
+
+  const merged = { ...current, ...patch };
+
+  await env.DB.prepare(
+    "CREATE TABLE IF NOT EXISTS monitor_state (id INTEGER PRIMARY KEY CHECK(id=1), last_run_at TEXT, last_success_at TEXT, next_run_at TEXT, checked INTEGER DEFAULT 0, sent INTEGER DEFAULT 0)"
+  ).run();
+
+  await env.DB.prepare(
+    "INSERT INTO monitor_state(id,last_run_at,last_success_at,next_run_at,checked,sent) VALUES(1,?,?,?,?,?) " +
+    "ON CONFLICT(id) DO UPDATE SET last_run_at=excluded.last_run_at,last_success_at=excluded.last_success_at,next_run_at=excluded.next_run_at,checked=excluded.checked,sent=excluded.sent"
+  ).bind(
+    merged.last_run_at,
+    merged.last_success_at,
+    merged.next_run_at,
+    Number(merged.checked || 0),
+    Number(merged.sent || 0)
+  ).run();
+}
+
 async function getUsage(env) {
   await ensureMonitorTables(env);
   return await env.DB.prepare("SELECT * FROM monitor_usage WHERE month=?")
