@@ -38,21 +38,132 @@ function sourcesFromAlert(value) {
   }
 }
 
+function parseJsonArray(value) {
+  try {
+    const parsed = JSON.parse(value || "[]");
+    return Array.isArray(parsed) ? parsed : [];
+  } catch { return []; }
+}
+
+function normalizeTimeToMinutes(value) {
+  const m = String(value || "").match(/(\d{1,2}):(\d{2})\s*(AM|PM)?/i);
+  if (!m) return null;
+  let h = Number(m[1]), min = Number(m[2]);
+  const ap = (m[3] || "").toUpperCase();
+  if (ap === "AM" && h === 12) h = 0;
+  if (ap === "PM" && h < 12) h += 12;
+  return h * 60 + min;
+}
+
+function matchDatePreference(alert, show) {
+  const pref = String(alert.date_pref || "Any date");
+  if (pref === "Any date") return true;
+  if (pref === "Specific date") return !alert.specific_date || alert.specific_date === show.date;
+  if (pref === "Release day") return show.isReleaseDay === true;
+  if (pref === "Next day") {
+    const now = new Date();
+    const d = new Date(String(show.date || "") + "T00:00:00Z");
+    const today = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
+    return !Number.isNaN(d.getTime()) && Math.round((d - today) / 86400000) === 1;
+  }
+  if (pref === "This weekend") {
+    if (show.isWeekend === true) return true;
+    const d = new Date(String(show.date || "") + "T00:00:00Z");
+    return !Number.isNaN(d.getTime()) && [0, 6].includes(d.getUTCDay());
+  }
+  return true;
+}
+
+function matchTimePreference(alert, show) {
+  const pref = String(alert.time_pref || "Any time");
+  if (pref === "Any time") return true;
+  if (pref === "FDFS only") return show.isFdfs === true;
+  const mins = normalizeTimeToMinutes(show.time);
+  if (mins === null) return true;
+  if (pref === "Morning · 6–12") return mins >= 360 && mins < 720;
+  if (pref === "Afternoon · 12–5") return mins >= 720 && mins < 1020;
+  if (pref === "Evening · 5–10") return mins >= 1020 && mins < 1320;
+  if (pref === "Late night · 10+") return mins >= 1320 || mins < 360;
+  return true;
+}
+
 function match(alert, show) {
   if (alert.city && alert.city.toLowerCase() !== String(show.city || "").toLowerCase()) return false;
   if (alert.movie && alert.movie.toLowerCase() !== String(show.movie || "").toLowerCase()) return false;
 
-  const theatres = JSON.parse(alert.theatres || "[]");
-  if (theatres.length && !theatres.some((x) => x.toLowerCase() === String(show.theatre || "").toLowerCase())) return false;
+  const theatres = parseJsonArray(alert.theatres);
+  if (theatres.length && !theatres.some((x) => String(x).toLowerCase() === String(show.theatre || "").toLowerCase())) return false;
 
-  if (alert.language && alert.language !== "Any" && !(show.languages || []).includes(alert.language)) return false;
-  if (alert.format && alert.format !== "Any" && !(show.formats || []).includes(alert.format)) return false;
-  if (alert.time_pref === "FDFS only" && !show.isFdfs) return false;
+  if (alert.language && alert.language !== "Any" &&
+      !(show.languages || []).some((x) => String(x).toLowerCase() === String(alert.language).toLowerCase())) return false;
+  if (alert.format && alert.format !== "Any" &&
+      !(show.formats || []).some((x) => String(x).toLowerCase() === String(alert.format).toLowerCase())) return false;
+  if (!matchDatePreference(alert, show)) return false;
+  if (!matchTimePreference(alert, show)) return false;
 
   const wantedSources = sourcesFromAlert(alert.source);
   if (wantedSources.length && wantedSources[0] !== "Any" && show.source && !wantedSources.includes(show.source)) return false;
-
   return true;
+}
+
+async function processShows(env, shows) {
+  if (!env.DB || !Array.isArray(shows) || !shows.length) return { sent: 0, checked: 0 };
+  const all = await env.DB.prepare("SELECT * FROM alerts WHERE status='active'").all();
+  const alerts = all.results || [];
+  let sent = 0, checked = 0;
+
+  for (const show of shows) {
+    checked++;
+    for (const alert of alerts) {
+      if (!match(alert, show)) continue;
+
+      const key = [
+        alert.id, show.source || "", show.bookingUrl || "", show.movie || "",
+        show.theatre || "", show.date || "", show.time || "",
+        (show.languages || []).join(","), (show.formats || []).join(",")
+      ].join("|");
+
+      const exists = await env.DB.prepare("SELECT id FROM deliveries WHERE dedupe_key=?").bind(key).first();
+      if (exists) continue;
+
+      try {
+        await send(
+          env,
+          alert.email,
+          "Tickets live · " + show.movie + " · " + show.theatre,
+          "<p><strong>Tickets are live.</strong></p>" +
+          "<p>" + esc(show.movie) + " · " + esc(show.theatre) + " · " + esc(show.date) + " · " + esc(show.time) + "</p>" +
+          "<p>Language: " + esc((show.languages || []).join(", ")) +
+          "<br>Format: " + esc((show.formats || []).join(", ")) +
+          "<br>Source: " + esc(show.source || "Official provider") + "</p>" +
+          (show.bookingUrl ? "<p><a href='" + esc(show.bookingUrl) + "'>Open official booking page →</a></p>" : "")
+        );
+        await env.DB.prepare(
+          "INSERT INTO deliveries(id,alert_id,dedupe_key,delivered_at) VALUES(?,?,?,datetime('now'))"
+        ).bind(crypto.randomUUID(), alert.id, key).run();
+        sent++;
+      } catch {
+        // Leave undelivered so the next poll can retry.
+      }
+    }
+  }
+  return { sent, checked };
+}
+
+async function fetchConfiguredFeed(env) {
+  if (!env.SHOWTIME_FEED_URL) return { configured: false, shows: [] };
+  const headers = {};
+  if (env.SHOWTIME_FEED_TOKEN) headers.authorization = "Bearer " + env.SHOWTIME_FEED_TOKEN;
+  const r = await fetch(env.SHOWTIME_FEED_URL, {
+    method: "GET",
+    headers,
+    cf: { cacheTtl: 0, cacheEverything: false }
+  });
+  if (!r.ok) throw new Error("showtime feed returned " + r.status);
+  const data = await r.json();
+  if (Array.isArray(data)) return { configured: true, shows: data };
+  if (Array.isArray(data.shows)) return { configured: true, shows: data.shows };
+  throw new Error("showtime feed must return shows[]");
 }
 
 export default {
@@ -71,7 +182,7 @@ export default {
     const u = new URL(req.url);
 
     if (u.pathname === "/api/health" && req.method === "GET") {
-      return json(env, { ok: true, service: "cineping-alert-api", version: "2026-09-25-alert-fix-v2", d1: !!env.DB, mailConfigured: !!(env.BREVO_API_KEY && env.BREVO_FROM_EMAIL) });
+      return json(env, { ok: true, service: "cineping-alert-api", version: "2026-09-26-monitor-v1", d1: !!env.DB, mailConfigured: !!(env.BREVO_API_KEY && env.BREVO_FROM_EMAIL), schedulerConfigured: !!env.SHOWTIME_FEED_URL });
     }
 
     if (u.pathname === "/api/alerts" && req.method === "POST") {
@@ -126,52 +237,29 @@ export default {
     }
 
     if (u.pathname === "/api/provider-events" && req.method === "POST") {
-      if (req.headers.get("x-ingest-secret") !== env.INGEST_SECRET) {
-        return json(env, { error: "unauthorized" }, 401);
-      }
-
+      if (req.headers.get("x-ingest-secret") !== env.INGEST_SECRET) return json(env, { error: "unauthorized" }, 401);
       try {
         const b = await req.json();
         if (!Array.isArray(b.shows)) return json(env, { error: "shows[] required" }, 400);
-
-        const all = await env.DB.prepare("SELECT * FROM alerts WHERE status='active'").all();
-        let sent = 0;
-
-        for (const show of b.shows) {
-          for (const alert of (all.results || [])) {
-            if (!match(alert, show)) continue;
-
-            const key = alert.id + "|" + (show.source || "") + "|" + (show.bookingUrl || "") + "|" + show.date + "|" + show.time;
-            const exists = await env.DB.prepare("SELECT id FROM deliveries WHERE dedupe_key=?").bind(key).first();
-            if (exists) continue;
-
-            await send(
-              env,
-              alert.email,
-              "Tickets live · " + show.movie + " · " + show.theatre,
-              "<p><strong>Tickets are live.</strong></p>" +
-              "<p>" + esc(show.movie) + " · " + esc(show.theatre) + " · " +
-              esc(show.date) + " · " + esc(show.time) + "</p>" +
-              "<p>Language: " + esc((show.languages || []).join(", ")) +
-              "<br>Format: " + esc((show.formats || []).join(", ")) +
-              "<br>Source: " + esc(show.source || "Official provider") + "</p>" +
-              (show.bookingUrl ? "<p><a href='" + esc(show.bookingUrl) + "'>Open official booking page →</a></p>" : "")
-            );
-
-            await env.DB.prepare(
-              "INSERT INTO deliveries(id,alert_id,dedupe_key,delivered_at) VALUES(?,?,?,datetime('now'))"
-            ).bind(crypto.randomUUID(), alert.id, key).run();
-
-            sent++;
-          }
-        }
-
-        return json(env, { ok: true, sent });
+        const result = await processShows(env, b.shows);
+        return json(env, { ok: true, ...result });
       } catch {
         return json(env, { error: "ingest failed" }, 500);
       }
     }
 
     return json(env, { error: "not found" }, 404);
+  },
+
+  async scheduled(event, env, ctx) {
+    ctx.waitUntil((async () => {
+      try {
+        const feed = await fetchConfiguredFeed(env);
+        if (!feed.configured) return;
+        await processShows(env, feed.shows);
+      } catch {
+        // Retry automatically on the next scheduled run.
+      }
+    })());
   }
 };
