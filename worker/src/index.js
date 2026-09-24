@@ -606,8 +606,6 @@ async function pollTarget(env, targetKey, immediate = false) {
 
   if (priorityWindow) {
     nextDelayMinutes = RELEASE_DAY_INTERVAL_MINUTES;
-  } else if (priorityWindow) {
-    nextDelayMinutes = RELEASE_DAY_INTERVAL_MINUTES;
   } else if (burstRemaining > 0) {
     nextDelayMinutes = BURST_INTERVAL_MINUTES;
   } else if (nearWindow) {
