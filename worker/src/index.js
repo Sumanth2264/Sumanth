@@ -439,13 +439,16 @@ function normalizeProviderTheatres(provider, city, movie, data) {
         address: v.address || "",
         lat: Number(v.latitude) || null,
         long: Number(v.longitude) || null,
+        screenTypes: [...new Set((Array.isArray(v.showtimes) ? v.showtimes : []).map(s => s.format || s.screen_format || s.auditorium_format || "").filter(Boolean).map(String))],
         shows: (Array.isArray(v.showtimes) ? v.showtimes : []).map(s => ({
           time: s.time || s.show_time || s.start_time || "",
           language: s.language || s.lang || "",
           format: s.format || s.screen_format || "",
+          auditorium: s.auditorium_name || s.auditorium || s.screen_name || "",
           bookingUrl: s.booking_url || s.bookingUrl || s.book_now_url || "",
           availableSeats: s.available_seats ?? s.availableSeats ?? null,
-          totalSeats: s.total_seats ?? s.totalSeats ?? null
+          totalSeats: s.total_seats ?? s.totalSeats ?? null,
+          seatCategories: Array.isArray(s.seat_categories) ? s.seat_categories : (Array.isArray(s.seatTypes) ? s.seatTypes : [])
         }))
       })).filter(v => v.name)
     };
@@ -467,13 +470,16 @@ function normalizeProviderTheatres(provider, city, movie, data) {
       address: t.address || "",
       lat: Number(t.location?.lat || t.latitude) || null,
       long: Number(t.location?.long || t.longitude) || null,
+      screenTypes: [...new Set((Array.isArray(t.showtimes) ? t.showtimes : []).map(s => s.screen_format || s.format || s.auditorium_format || "").filter(Boolean).map(String))],
       shows: (Array.isArray(t.showtimes) ? t.showtimes : []).map(s => ({
         time: s.time || s.show_time || s.start_time || "",
         language: s.language || s.lang || "",
         format: s.screen_format || s.format || s.auditorium_format || "",
+        auditorium: s.auditorium_name || s.auditorium || s.screen_name || "",
         bookingUrl: s.booking_url || s.bookingUrl || s.book_now_url || "",
         availableSeats: s.available_seats ?? s.availableSeats ?? null,
-        totalSeats: s.total_seats ?? s.totalSeats ?? null
+        totalSeats: s.total_seats ?? s.totalSeats ?? null,
+        seatCategories: Array.isArray(s.seat_categories) ? s.seat_categories : (Array.isArray(s.seatTypes) ? s.seatTypes : [])
       }))
     })).filter(t => t.name)
   };
@@ -603,6 +609,8 @@ function normalizeShowSlots(detail, movie, city, releaseDate) {
         time,
         formats,
         languages,
+        auditorium: slot.auditorium_name || slot.auditorium || slot.screen_name || "",
+        seatCategories: Array.isArray(slot.seat_categories) ? slot.seat_categories : (Array.isArray(slot.seatTypes) ? slot.seatTypes : []),
         source: "District",
         bookingUrl: slot.booking_url || slot.bookingUrl || slot.book_now_url || theatre.booking_url || "",
         availableSeats: slot.available_seats ?? slot.availableSeats ?? null,
@@ -633,6 +641,8 @@ function normalizeBmsShows(detail, movie, city, fallbackDate) {
         time: String(slot.time || slot.show_time || slot.start_time || ""),
         formats: [slot.format, slot.screen_format].filter(Boolean).map(String),
         languages: [slot.language, slot.lang].filter(Boolean).map(String),
+        auditorium: slot.auditorium_name || slot.auditorium || slot.screen_name || "",
+        seatCategories: Array.isArray(slot.seat_categories) ? slot.seat_categories : (Array.isArray(slot.seatTypes) ? slot.seatTypes : []),
         source: "BookMyShow",
         bookingUrl: slot.booking_url || slot.bookingUrl || slot.book_now_url || venue.booking_url || "",
         availableSeats: slot.available_seats ?? slot.availableSeats ?? null,
