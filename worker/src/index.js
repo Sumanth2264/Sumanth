@@ -156,11 +156,12 @@ const DISTRICT_MOVIES_URL = "https://api.parse.bot/scraper/9dbc34b2-b7c3-4e9b-95
 const DISTRICT_SHOWTIMES_URL = "https://api.parse.bot/scraper/9dbc34b2-b7c3-4e9b-9540-6d2bb2568c57/get_movie_showtimes";
 
 const MONTHLY_CREDIT_CAP = 190;
-const CREATION_BURST_CALLS = 2;
+const CREATION_BURST_CALLS = 4;
 const BURST_INTERVAL_MINUTES = 5;
-const NEAR_DATE_INTERVAL_MINUTES = 120;
+const NEAR_DATE_INTERVAL_MINUTES = 60;
 const NORMAL_INTERVAL_MINUTES = 1440;
 const RELEASE_DAY_INTERVAL_MINUTES = 5;
+const MAX_SHOWTIME_CALLS_PER_TARGET = 7;
 const MOVIE_CACHE_HOURS = 168;
 
 function normalizeTitle(value) {
@@ -534,6 +535,19 @@ async function pollTarget(env, targetKey, immediate = false) {
 
   const targetAlert = alerts[0];
   const usageMonth = monthKey();
+  const targetCalls = target.usage_month === usageMonth
+    ? Number(target.showtime_calls_month || 0)
+    : 0;
+
+  if (targetCalls >= MAX_SHOWTIME_CALLS_PER_TARGET) {
+    const nextMonth = new Date();
+    nextMonth.setUTCMonth(nextMonth.getUTCMonth() + 1, 1);
+    nextMonth.setUTCHours(0, 5, 0, 0);
+    await env.DB.prepare(
+      "UPDATE monitor_targets SET usage_month=?,showtime_calls_month=0,next_poll_at=? WHERE target_key=?"
+    ).bind(monthKey(nextMonth), isoNoZ(nextMonth), targetKey).run();
+    return { checked: 0, sent: 0, skipped: true, reason: "target-month-cap" };
+  }
 
   const movieData = await fetchDistrictMoviesCached(env, target.city, false);
   const movie = findMovie(movieData, target.movie);
@@ -591,6 +605,8 @@ async function pollTarget(env, targetKey, immediate = false) {
   }
 
   if (priorityWindow) {
+    nextDelayMinutes = RELEASE_DAY_INTERVAL_MINUTES;
+  } else if (priorityWindow) {
     nextDelayMinutes = RELEASE_DAY_INTERVAL_MINUTES;
   } else if (burstRemaining > 0) {
     nextDelayMinutes = BURST_INTERVAL_MINUTES;
@@ -681,7 +697,7 @@ export default {
       return json(env, {
         ok: true,
         service: "cineping-alert-api",
-        version: "2026-09-26-district-monitor-v8",
+        version: "2026-09-26-district-monitor-v9",
         d1: !!env.DB,
         mailConfigured: !!(env.BREVO_API_KEY && env.BREVO_FROM_EMAIL),
         districtConfigured: !!env.PARSE_API_KEY,
