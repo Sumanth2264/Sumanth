@@ -221,6 +221,9 @@ async function ensureMonitorTables(env) {
   try {
     await env.DB.prepare("ALTER TABLE alerts ADD COLUMN specific_date TEXT DEFAULT ''").run();
   } catch {}
+  try { await env.DB.prepare("ALTER TABLE monitor_targets ADD COLUMN provider TEXT DEFAULT 'District'").run(); } catch {}
+  try { await env.DB.prepare("ALTER TABLE monitor_targets ADD COLUMN provider_movie_id TEXT DEFAULT ''").run(); } catch {}
+
 
   await env.DB.prepare(
     "INSERT OR IGNORE INTO monitor_usage(month,credits_used,catalog_calls,showtime_calls) VALUES(?,0,0,0)"
@@ -346,7 +349,9 @@ async function providerGet(env, provider, endpoint, params, cost, cacheKey, cach
 
   const p = providerName(provider);
   const url = p === "BookMyShow" ? BMS_API_BASE + "/" + endpoint : endpoint;
-  const kind = cost <= 2 ? "catalog" : "showtime";
+  const kind = (String(providerName(provider)) === "BookMyShow" && endpoint === "get_now_showing_movies") || (String(providerName(provider)) === "District" && endpoint === DISTRICT_MOVIES_URL)
+    ? "catalog"
+    : "showtime";
   const ok = await reserveCredits(env, cost, kind);
   if (!ok) throw new Error("CinePing monthly provider budget reached");
 
@@ -879,7 +884,7 @@ export default {
       return json(env, {
         ok: true,
         service: "cineping-alert-api",
-        version: "2026-09-26-live-catalog-v2",
+        version: "2026-09-26-live-catalog-monitor-v3",
         d1: !!env.DB,
         mailConfigured: !!(env.BREVO_API_KEY && env.BREVO_FROM_EMAIL),
         districtConfigured: !!env.PARSE_API_KEY,
