@@ -561,9 +561,13 @@ async function pollTarget(env, targetKey, immediate = false) {
   );
 
   const shows = normalizeShowSlots(detail, movie, target.city, releaseDateFromMovie(movie));
-  const result = await processShows(env, shows);
+  const bookableShows = shows.filter((show) => {
+    if (!show.bookingUrl) return false;
+    if (show.availableSeats !== null && Number(show.availableSeats) <= 0) return false;
+    return true;
+  });
+  const result = await processShows(env, bookableShows);
 
-  const newCalls = targetCalls + 1;
   const burstRemaining = Math.max(0, Number(target.burst_remaining || 0) - 1);
 
   const dist = dateDistanceDays(requested || releaseDateFromMovie(movie));
@@ -676,7 +680,7 @@ export default {
       return json(env, {
         ok: true,
         service: "cineping-alert-api",
-        version: "2026-09-26-district-monitor-v7",
+        version: "2026-09-26-district-monitor-v8",
         d1: !!env.DB,
         mailConfigured: !!(env.BREVO_API_KEY && env.BREVO_FROM_EMAIL),
         districtConfigured: !!env.PARSE_API_KEY,
