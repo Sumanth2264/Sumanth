@@ -10,6 +10,11 @@ CREATE TABLE IF NOT EXISTS alerts (
   source TEXT,
   status TEXT NOT NULL DEFAULT 'active',
   manage_token TEXT NOT NULL UNIQUE,
+  provider TEXT DEFAULT 'District',
+  provider_movie_id TEXT DEFAULT '',
+  provider_movies TEXT DEFAULT '{}',
+  date_pref TEXT DEFAULT 'Any date',
+  specific_date TEXT DEFAULT '',
   created_at TEXT NOT NULL
 );
 CREATE TABLE IF NOT EXISTS deliveries (
