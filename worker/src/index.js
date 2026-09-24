@@ -154,6 +154,7 @@ async function processShows(env, shows) {
 
 const DISTRICT_MOVIES_URL = "https://api.parse.bot/scraper/9dbc34b2-b7c3-4e9b-9540-6d2bb2568c57/get_movies_in_theaters";
 const DISTRICT_SHOWTIMES_URL = "https://api.parse.bot/scraper/9dbc34b2-b7c3-4e9b-9540-6d2bb2568c57/get_movie_showtimes";
+const BMS_API_BASE = "https://api.parse.bot/scraper/c9d4d699-5bca-49af-a878-144ad05b0f5f";
 
 const MONTHLY_CREDIT_CAP = 190;
 const CREATION_BURST_CALLS = 4;
@@ -203,6 +204,12 @@ async function ensureMonitorTables(env) {
   await env.DB.prepare(
     "CREATE TABLE IF NOT EXISTS monitor_targets (target_key TEXT PRIMARY KEY, city TEXT NOT NULL, movie TEXT NOT NULL, date_pref TEXT NOT NULL DEFAULT 'Any date', specific_date TEXT NOT NULL DEFAULT '', movie_id TEXT NOT NULL DEFAULT '', active INTEGER NOT NULL DEFAULT 1, next_poll_at TEXT NOT NULL, burst_remaining INTEGER NOT NULL DEFAULT 0, usage_month TEXT NOT NULL DEFAULT '', showtime_calls_month INTEGER NOT NULL DEFAULT 0, last_polled_at TEXT, last_success_at TEXT, last_match_at TEXT)"
   ).run();
+
+  await env.DB.prepare(
+    "CREATE TABLE IF NOT EXISTS provider_cache (cache_key TEXT PRIMARY KEY, payload TEXT NOT NULL, fetched_at TEXT NOT NULL)"
+  ).run();
+  try { await env.DB.prepare("ALTER TABLE alerts ADD COLUMN provider TEXT DEFAULT 'District'").run(); } catch {}
+  try { await env.DB.prepare("ALTER TABLE alerts ADD COLUMN provider_movie_id TEXT DEFAULT ''").run(); } catch {}
 
   await env.DB.prepare(
     "CREATE TABLE IF NOT EXISTS district_movie_cache (cache_key TEXT PRIMARY KEY, payload TEXT NOT NULL, fetched_at TEXT NOT NULL)"
@@ -306,6 +313,147 @@ async function districtGet(url, params, env, kind, cost) {
     await releaseCredits(env, cost, kind);
     throw e;
   }
+}
+
+function providerName(value) {
+  return String(value || "District").toLowerCase() === "bookmyshow" ? "BookMyShow" : "District";
+}
+
+function bmsCitySlug(city) {
+  const aliases = {
+    "Delhi NCR": "delhi-ncr",
+    "Bengaluru": "bengaluru",
+    "Bangalore": "bengaluru"
+  };
+  return aliases[city] || String(city || "")
+    .trim()
+    .toLowerCase()
+    .replace(/&/g, "and")
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-|-$/g, "");
+}
+
+async function providerGet(env, provider, endpoint, params, cost, cacheKey, cacheMinutes) {
+  await ensureMonitorTables(env);
+
+  if (cacheKey && cacheMinutes > 0) {
+    const cached = await env.DB.prepare("SELECT payload,fetched_at FROM provider_cache WHERE cache_key=?").bind(cacheKey).first();
+    const age = cached?.fetched_at ? Date.now() - Date.parse(cached.fetched_at + "Z") : Infinity;
+    if (cached && Number.isFinite(age) && age < cacheMinutes * 60000) {
+      try { return { data: JSON.parse(cached.payload), cached: true }; } catch {}
+    }
+  }
+
+  const p = providerName(provider);
+  const url = p === "BookMyShow" ? BMS_API_BASE + "/" + endpoint : endpoint;
+  const kind = cost <= 2 ? "catalog" : "showtime";
+  const ok = await reserveCredits(env, cost, kind);
+  if (!ok) throw new Error("CinePing monthly provider budget reached");
+
+  try {
+    const r = await fetch(url + "?" + new URLSearchParams(params).toString(), {
+      method: "GET",
+      headers: { "accept": "application/json", "x-api-key": env.PARSE_API_KEY },
+      cf: { cacheTtl: 0, cacheEverything: false }
+    });
+    const body = await r.text();
+    let data = {};
+    try { data = JSON.parse(body); } catch {}
+
+    if (!r.ok) {
+      await releaseCredits(env, cost, kind);
+      throw new Error(p + " API returned " + r.status);
+    }
+
+    if (cacheKey && cacheMinutes > 0) {
+      await env.DB.prepare(
+        "INSERT INTO provider_cache(cache_key,payload,fetched_at) VALUES(?,?,datetime('now')) ON CONFLICT(cache_key) DO UPDATE SET payload=excluded.payload,fetched_at=excluded.fetched_at"
+      ).bind(cacheKey, JSON.stringify(data)).run();
+    }
+
+    return { data, cached: false };
+  } catch (e) {
+    if (String(e.message || "").includes("monthly provider budget")) throw e;
+    await releaseCredits(env, cost, kind);
+    throw e;
+  }
+}
+
+function normalizeCatalog(provider, city, data) {
+  const p = providerName(provider);
+  const list = Array.isArray(data?.movies)
+    ? data.movies
+    : Array.isArray(data?.data?.movies) ? data.data.movies : [];
+
+  return list.map(m => {
+    if (p === "BookMyShow") {
+      return {
+        id: String(m.event_code || m.eventCode || m.id || ""),
+        title: m.title || m.event_name || "",
+        poster: m.poster_url || m.poster || "",
+        languages: Array.isArray(m.languages) ? m.languages : String(m.language || "").split("|").filter(Boolean),
+        formats: Array.isArray(m.formats) ? m.formats : [],
+        url: m.cta_url || m.booking_url || "",
+        date: m.event_date || "",
+        source: p,
+        city
+      };
+    }
+
+    return {
+      id: String(m.movie_id || m.id || ""),
+      title: m.title || m.name || "",
+      poster: m.image || m.poster || "",
+      languages: Array.isArray(m.languages) ? m.languages : [],
+      formats: Array.isArray(m.formats) ? m.formats : [],
+      url: m.web_url || "",
+      date: m.release_date || "",
+      source: p,
+      city
+    };
+  }).filter(m => m.id && m.title);
+}
+
+function normalizeProviderTheatres(provider, city, movie, data) {
+  const p = providerName(provider);
+  if (p === "BookMyShow") {
+    const venues = Array.isArray(data?.venues) ? data.venues :
+      Array.isArray(data?.data?.venues) ? data.data.venues : [];
+    return {
+      source: p,
+      city,
+      movie,
+      availableDates: Array.isArray(data?.available_dates)
+        ? data.available_dates
+        : Array.isArray(data?.data?.available_dates) ? data.data.available_dates : [],
+      theatres: venues.map(v => ({
+        id: String(v.venue_code || v.id || v.venue_name || ""),
+        name: v.venue_name || v.name || "",
+        address: v.address || "",
+        lat: Number(v.latitude) || null,
+        long: Number(v.longitude) || null
+      })).filter(v => v.name)
+    };
+  }
+
+  const theatres = Array.isArray(data?.theatres) ? data.theatres :
+    Array.isArray(data?.data?.theatres) ? data.data.theatres : [];
+
+  return {
+    source: p,
+    city,
+    movie,
+    availableDates: Array.isArray(data?.show_dates)
+      ? data.show_dates
+      : Array.isArray(data?.data?.show_dates) ? data.data.show_dates : [],
+    theatres: theatres.map(t => ({
+      id: String(t.id || t.name || t.theatre_name || ""),
+      name: t.name || t.theatre_name || "",
+      address: t.address || "",
+      lat: Number(t.location?.lat || t.latitude) || null,
+      long: Number(t.location?.long || t.longitude) || null
+    })).filter(t => t.name)
+  };
 }
 
 async function fetchDistrictMoviesCached(env, city, force = false) {
@@ -695,7 +843,7 @@ export default {
       return json(env, {
         ok: true,
         service: "cineping-alert-api",
-        version: "2026-09-26-district-monitor-v9",
+        version: "2026-09-26-live-catalog-v1",
         d1: !!env.DB,
         mailConfigured: !!(env.BREVO_API_KEY && env.BREVO_FROM_EMAIL),
         districtConfigured: !!env.PARSE_API_KEY,
@@ -707,6 +855,64 @@ export default {
           showtimeCalls: Number(usage.showtime_calls || 0)
         } : null
       });
+    }
+
+    if ((u.pathname === "/api/catalog" || u.pathname === "/api/movies") && req.method === "GET") {
+      try {
+        if (!env.PARSE_API_KEY) return json(env, { error: "provider integration not configured" }, 503);
+        const provider = providerName(u.searchParams.get("source"));
+        const city = String(u.searchParams.get("city") || "").trim();
+        if (!city) return json(env, { error: "city is required" }, 400);
+
+        const result = provider === "District"
+          ? await providerGet(env, provider, DISTRICT_MOVIES_URL, { city }, 2, "catalog:District:" + city.toLowerCase(), 360)
+          : await providerGet(env, provider, "get_now_showing_movies", { city: bmsCitySlug(city) }, 5, "catalog:BookMyShow:" + bmsCitySlug(city), 360);
+
+        return json(env, {
+          ok: true,
+          provider,
+          city,
+          cached: result.cached,
+          movies: normalizeCatalog(provider, city, result.data)
+        });
+      } catch (e) {
+        return json(env, { error: e.message || "movie catalogue unavailable" }, 502);
+      }
+    }
+
+    if (u.pathname === "/api/showtimes" && req.method === "GET") {
+      try {
+        if (!env.PARSE_API_KEY) return json(env, { error: "provider integration not configured" }, 503);
+        const provider = providerName(u.searchParams.get("source"));
+        const city = String(u.searchParams.get("city") || "").trim();
+        const movieId = String(u.searchParams.get("movieId") || "").trim();
+        const movie = String(u.searchParams.get("movie") || "").trim();
+        const date = String(u.searchParams.get("date") || "").trim();
+
+        if (!city || !movieId) return json(env, { error: "city and movieId are required" }, 400);
+
+        const params = provider === "BookMyShow"
+          ? { event_code: movieId, city: bmsCitySlug(city), ...(date ? { date: date.replace(/-/g, "") } : {}) }
+          : { movie_id: movieId, city, ...(date ? { date } : {}) };
+
+        const result = await providerGet(
+          env,
+          provider,
+          provider === "BookMyShow" ? "get_movie_showtimes" : DISTRICT_SHOWTIMES_URL,
+          params,
+          provider === "BookMyShow" ? 3 : 1,
+          "showtimes:" + provider + ":" + city.toLowerCase() + ":" + movieId + ":" + (date || "earliest"),
+          2
+        );
+
+        return json(env, {
+          ok: true,
+          ...normalizeProviderTheatres(provider, city, movie, result.data),
+          cached: result.cached
+        });
+      } catch (e) {
+        return json(env, { error: e.message || "showtimes unavailable" }, 502);
+      }
     }
 
     if (u.pathname === "/api/alerts" && req.method === "POST") {
@@ -727,7 +933,7 @@ export default {
         const specificDate = String(b.specificDate || "");
 
         await env.DB.prepare(
-          "INSERT INTO alerts(id,email,movie,city,theatres,language,format,time_pref,date_pref,specific_date,source,status,manage_token,created_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,datetime('now'))"
+          "INSERT INTO alerts(id,email,movie,city,theatres,language,format,time_pref,date_pref,specific_date,source,status,manage_token,provider,provider_movie_id,created_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,datetime('now'))"
         ).bind(
           id,
           email,
@@ -741,7 +947,9 @@ export default {
           specificDate,
           JSON.stringify(Array.isArray(b.sources) && b.sources.length ? b.sources : ["Any"]),
           "active",
-          token
+          token,
+          providerName(b.provider),
+          String(b.providerMovieId || "")
         ).run();
 
         const alertRow = await env.DB.prepare("SELECT * FROM alerts WHERE id=?").bind(id).first();
@@ -756,7 +964,7 @@ export default {
             "<p>Your CinePing alert for <strong>" + esc(movie) + "</strong> in <strong>" +
             esc(city || "India") + "</strong> is active.</p>" +
             "<p>Selected theatres: " + esc((b.theatres || []).join(", ") || "Any matching theatre") + ".</p>" +
-            "<p>CinePing will check District for matching showtimes and email you when a matching booking appears.</p>"
+            "<p>CinePing will check your selected booking source for matching showtimes and email you when a bookable match appears.</p>"
           );
           emailSent = true;
         } catch {}
