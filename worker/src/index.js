@@ -416,6 +416,7 @@ function normalizeCatalog(provider, city, data) {
 
 function normalizeProviderTheatres(provider, city, movie, data) {
   const p = providerName(provider);
+
   if (p === "BookMyShow") {
     const venues = Array.isArray(data?.venues) ? data.venues :
       Array.isArray(data?.data?.venues) ? data.data.venues : [];
@@ -431,7 +432,15 @@ function normalizeProviderTheatres(provider, city, movie, data) {
         name: v.venue_name || v.name || "",
         address: v.address || "",
         lat: Number(v.latitude) || null,
-        long: Number(v.longitude) || null
+        long: Number(v.longitude) || null,
+        shows: (Array.isArray(v.showtimes) ? v.showtimes : []).map(s => ({
+          time: s.time || s.show_time || s.start_time || "",
+          language: s.language || s.lang || "",
+          format: s.format || s.screen_format || "",
+          bookingUrl: s.booking_url || s.bookingUrl || s.book_now_url || "",
+          availableSeats: s.available_seats ?? s.availableSeats ?? null,
+          totalSeats: s.total_seats ?? s.totalSeats ?? null
+        }))
       })).filter(v => v.name)
     };
   }
@@ -451,7 +460,15 @@ function normalizeProviderTheatres(provider, city, movie, data) {
       name: t.name || t.theatre_name || "",
       address: t.address || "",
       lat: Number(t.location?.lat || t.latitude) || null,
-      long: Number(t.location?.long || t.longitude) || null
+      long: Number(t.location?.long || t.longitude) || null,
+      shows: (Array.isArray(t.showtimes) ? t.showtimes : []).map(s => ({
+        time: s.time || s.show_time || s.start_time || "",
+        language: s.language || s.lang || "",
+        format: s.screen_format || s.format || s.auditorium_format || "",
+        bookingUrl: s.booking_url || s.bookingUrl || s.book_now_url || "",
+        availableSeats: s.available_seats ?? s.availableSeats ?? null,
+        totalSeats: s.total_seats ?? s.totalSeats ?? null
+      }))
     })).filter(t => t.name)
   };
 }
